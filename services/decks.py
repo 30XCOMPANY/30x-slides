@@ -1,6 +1,6 @@
 """
 [INPUT]: 依赖 json、os 与 python-pptx 读取 deck 内容和 viewer 恢复载荷
-[OUTPUT]: 对外提供 deck 内容读写、标准化、标题提取与 system prompt 构建
+[OUTPUT]: 对外提供 deck 内容读写、标准化、标题提取、section synopsis 与 system prompt 构建
 [POS]: services 的 deck 元数据层，被 app.py 上传流程与 chat.py 对话流程共同消费
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 """
@@ -239,6 +239,90 @@ def summarize_slide_core(slide_content):
     }
 
 
+def choose_synopsis_section_count(total_slides):
+    if total_slides >= 18:
+        return 5
+    if total_slides >= 8:
+        return 4
+    return max(3, min(4, total_slides))
+
+
+def partition_slide_ranges(total_slides, section_count):
+    if total_slides <= 0 or section_count <= 0:
+        return []
+
+    base = total_slides // section_count
+    remainder = total_slides % section_count
+    ranges = []
+    start = 0
+    for idx in range(section_count):
+        size = base + (1 if idx < remainder else 0)
+        if size <= 0:
+            continue
+        end = start + size
+        ranges.append((start, end))
+        start = end
+    return ranges
+
+
+def best_section_phrase(section_slides):
+    phrase_scores = {}
+    phrase_order = []
+
+    for offset, slide_content in enumerate(section_slides):
+        summary = summarize_slide_core(slide_content)
+        title = summary["title"]
+        title_phrases = split_phrases(title) or ([title] if title else [])
+        body_phrases = []
+        for line in summary["body_lines"][:3]:
+            body_phrases.extend(split_phrases(line)[:2])
+
+        for phrase in title_phrases[:3] + body_phrases[:3]:
+            normalized = phrase.lower()
+            if is_weak_theme_phrase(phrase):
+                continue
+            if normalized not in phrase_scores:
+                phrase_scores[normalized] = {"phrase": phrase, "score": 0}
+                phrase_order.append(normalized)
+
+            score = 5 if phrase in title_phrases else 3
+            if offset == 0:
+                score += 1
+            phrase_scores[normalized]["score"] += score
+
+    if not phrase_scores:
+        for slide_content in section_slides:
+            title = get_slide_title(slide_content)
+            if not is_weak_theme_phrase(title):
+                return title
+        return "the next part of the story"
+
+    ranked = sorted(
+        phrase_order,
+        key=lambda key: (-phrase_scores[key]["score"], phrase_order.index(key))
+    )
+    return phrase_scores[ranked[0]]["phrase"]
+
+
+def build_deck_synopsis(all_content):
+    total_slides = len(all_content)
+    if not total_slides:
+        return []
+
+    section_count = min(choose_synopsis_section_count(total_slides), total_slides)
+    synopsis = []
+    for start, end in partition_slide_ranges(total_slides, section_count):
+        section_slides = all_content[start:end]
+        if not section_slides:
+            continue
+        synopsis.append({
+            "label": best_section_phrase(section_slides),
+            "start_slide": section_slides[0]["slide"],
+            "end_slide": section_slides[-1]["slide"],
+        })
+    return synopsis
+
+
 def build_navigation_index(all_content):
     index = []
     for slide_content in all_content:
@@ -316,20 +400,21 @@ def infer_navigation_target(user_text, all_content, current_slide_idx):
 
 
 def build_greeting(all_content):
-    themes = extract_theme_phrases(all_content)
-    if not themes:
+    synopsis = build_deck_synopsis(all_content)
+    if not synopsis:
         return (
             "Hey, glad you're here. I can map out the big sections in this deck, give you the fast overview, "
             "and then slow down wherever you want. What do you want to get into first?"
         )
-    sections = themes[:3]
-    section_text = join_phrases(sections)
-    if len(sections) == 1:
-        summary = f"At a high level, the story is really about {sections[0]} and why it matters."
+
+    section_labels = [section["label"] for section in synopsis[:5]]
+    section_text = join_phrases(section_labels)
+    if len(section_labels) == 1:
+        summary = f"At a high level, the story is really about {section_labels[0]} and why it matters."
     else:
         summary = (
-            f"So the deck really moves through {section_text}, "
-            "and ties those pieces into one clear story instead of leaving them as separate bullets."
+            f"So the deck moves through {section_text}, "
+            "and turns those sections into one clear story instead of leaving them as disconnected slides."
         )
 
     return (
