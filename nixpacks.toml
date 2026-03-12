@@ -1,0 +1,8 @@
+[phases.setup]
+aptPkgs = ["libreoffice-core", "libreoffice-impress", "libreoffice-writer", "fonts-noto-cjk", "fonts-liberation", "fonts-dejavu", "fonts-roboto", "fonts-open-sans", "fonts-lato", "fontconfig"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 2 --timeout 120 app:app"
