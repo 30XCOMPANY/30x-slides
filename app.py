@@ -409,7 +409,7 @@ def get_slide_title(sc):
 
 
 def build_greeting(all_content):
-    """Build a deterministic greeting so first contact never depends on LLM health."""
+    """Build a deterministic host-style greeting so first contact never depends on LLM health."""
     ignored = {"title slide", "thank you", "questions", "end", ""}
     titles = []
     seen = set()
@@ -423,18 +423,18 @@ def build_greeting(all_content):
         titles.append(title)
 
     if not titles:
-        return "I can walk you through the key ideas here. Where do you wanna start?"
+        return "Alright, I can give you the quick story here and we can jump straight to whatever matters most. Where do you wanna start?"
 
     themes = titles[:5]
     if len(themes) == 1:
-        return f"We can dig into {themes[0]}. Where do you wanna start?"
+        return f"Alright, this one really centers on {themes[0]}, and I can walk you through the important bits fast. Where do you wanna start?"
 
     if len(themes) == 2:
         theme_text = f"{themes[0]} and {themes[1]}"
     else:
         theme_text = ", ".join(themes[:-1]) + f", and {themes[-1]}"
 
-    return f"We can dig into {theme_text}. Where do you wanna start?"
+    return f"Alright, we can move through {theme_text}, and I can take you straight to the part you care about most. Where do you wanna start?"
 
 
 def build_system_prompt(all_content, current_slide_idx):
