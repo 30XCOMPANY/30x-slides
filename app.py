@@ -529,14 +529,18 @@ def upload():
     pptx_path = os.path.join(deck_dir, "deck.pptx")
     file.save(pptx_path)
 
-    font_report = ensure_fonts(pptx_path)
-    with open(os.path.join(deck_dir, "fonts.txt"), "w") as f:
-        for cat in ("found", "installed", "missing"):
-            for name in font_report[cat]:
-                f.write(f"{cat}: {name}\n")
+    try:
+        font_report = ensure_fonts(pptx_path)
+        with open(os.path.join(deck_dir, "fonts.txt"), "w") as f:
+            for cat in ("found", "installed", "missing"):
+                for name in font_report[cat]:
+                    f.write(f"{cat}: {name}\n")
 
-    convert_deck(deck_dir)
-    return redirect(url_for("viewer", deck_id=deck_id))
+        convert_deck(deck_dir)
+        return redirect(url_for("viewer", deck_id=deck_id))
+    except Exception as e:
+        print(f"[UPLOAD ERROR] {e}", flush=True)
+        return f"Conversion failed: {e}", 500
 
 
 @app.route("/view/<deck_id>")
@@ -582,24 +586,28 @@ def reconvert(deck_id):
     if not os.path.exists(pptx_path):
         return jsonify({"error": "Deck not found"}), 404
 
-    replacements = request.json.get("replacements", {})
-    weight_map = request.json.get("weights", {})
-    if replacements:
-        for new_font in replacements.values():
-            if not is_font_installed(new_font):
-                try_install_font(new_font)
-        subprocess.run(["fc-cache", "-f"], capture_output=True)
-        apply_font_replacements(pptx_path, replacements, weight_map)
+    try:
+        replacements = request.json.get("replacements", {})
+        weight_map = request.json.get("weights", {})
+        if replacements:
+            for new_font in replacements.values():
+                if not is_font_installed(new_font):
+                    try_install_font(new_font)
+            subprocess.run(["fc-cache", "-f"], capture_output=True)
+            apply_font_replacements(pptx_path, replacements, weight_map)
 
-    convert_deck(deck_dir)
+        convert_deck(deck_dir)
 
-    report = ensure_fonts(pptx_path)
-    with open(os.path.join(deck_dir, "fonts.txt"), "w") as f:
-        for cat in ("found", "installed", "missing"):
-            for name in report[cat]:
-                f.write(f"{cat}: {name}\n")
+        report = ensure_fonts(pptx_path)
+        with open(os.path.join(deck_dir, "fonts.txt"), "w") as f:
+            for cat in ("found", "installed", "missing"):
+                for name in report[cat]:
+                    f.write(f"{cat}: {name}\n")
 
-    return jsonify({"ok": True})
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[RECONVERT ERROR] {e}", flush=True)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/download/<deck_id>")
