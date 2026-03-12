@@ -176,6 +176,7 @@ let isRecording = false;
 let recognition = null;
 let isBusy = false;
 const sessionId = Math.random().toString(36).slice(2);
+let speechFallback = null;
 
 function getVoice() { return document.getElementById('voiceSelect').value; }
 
@@ -250,17 +251,40 @@ async function talkToBot(text) {
 
 async function fetchAudio(text, voice) {
   try {
+    startSpeechFallback(text);
     const resp = await fetch(`${serverUrl}/api/tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, voice }),
     });
     const data = await resp.json();
-    if (data.audio) playAudio(data.audio);
+    if (data.audio) {
+      if (speechFallback) {
+        clearTimeout(speechFallback.timer);
+        speechFallback = null;
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      playAudio(data.audio);
+    }
     else setTimeout(hideSubtitle, 3000);
   } catch (e) {
     setTimeout(hideSubtitle, 3000);
   }
+}
+
+function startSpeechFallback(text) {
+  if (!('speechSynthesis' in window) || !text) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.03;
+  utterance.pitch = 1.0;
+  utterance.lang = 'en-US';
+  const timer = setTimeout(() => {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }, 250);
+  speechFallback = { timer, utterance };
 }
 
 function toggleMic() {
@@ -312,6 +336,13 @@ function playAudio(b64) {
 
 function stopAudio() {
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if (speechFallback) {
+    clearTimeout(speechFallback.timer);
+    speechFallback = null;
+  }
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
 }
 </script>
 </body>

@@ -438,6 +438,7 @@ let currentAudio = null;
 let recognition = null;
 let isBusy = false;
 let hasGreeted = false;
+let speechFallback = null;
 
 /* ---- 状态常量 ---- */
 const STATE = { IDLE: 0, LISTENING: 1, THINKING: 2, SPEAKING: 3 };
@@ -653,8 +654,7 @@ async function talkToBot(text) {
    ============================================================ */
 function speak(text) {
   killAudio();
-  voiceState = STATE.SPEAKING;
-  updateButton();
+  startSpeechFallback(text);
 
   fetch('/api/tts', {
     method: 'POST',
@@ -664,6 +664,15 @@ function speak(text) {
     .then(r => r.json())
     .then(data => {
       if (!data.audio || !conversationMode) { openMic(); return; }
+      if (speechFallback) {
+        clearTimeout(speechFallback.timer);
+        speechFallback = null;
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      voiceState = STATE.SPEAKING;
+      updateButton();
       const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
       currentAudio = audio;
       audio.onended = () => {
@@ -675,11 +684,40 @@ function speak(text) {
     .catch(() => { openMic(); });
 }
 
+function startSpeechFallback(text) {
+  if (!('speechSynthesis' in window) || !text) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.03;
+  utterance.pitch = 1.0;
+  utterance.lang = 'en-US';
+
+  const timer = setTimeout(() => {
+    if (!conversationMode) return;
+    voiceState = STATE.SPEAKING;
+    updateButton();
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }, 250);
+
+  utterance.onend = () => {
+    if (conversationMode) openMic();
+  };
+
+  speechFallback = { timer, utterance };
+}
+
 function killAudio() {
   if (currentAudio) {
     currentAudio.onended = null;
     currentAudio.pause();
     currentAudio = null;
+  }
+  if (speechFallback) {
+    clearTimeout(speechFallback.timer);
+    speechFallback = null;
+  }
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
   }
 }
 </script>
