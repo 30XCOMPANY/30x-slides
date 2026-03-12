@@ -19,7 +19,7 @@ import threading
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
 from flask import (
     Flask, request, redirect, url_for,
     render_template, send_from_directory, jsonify, Response,
@@ -43,9 +43,35 @@ else:
     FONT_DIR = Path.home() / ".local" / "share" / "fonts"
 FONT_DIR.mkdir(parents=True, exist_ok=True)
 
+# ---- 环境变量启动诊断 ----
+def _env_flag(name):
+    return "SET" if os.environ.get(name) else "MISSING"
+
+print(
+    f"[BOOT] cwd={os.getcwd()} file_dir={Path(__file__).parent} "
+    f"MINIMAX_API_KEY={_env_flag('MINIMAX_API_KEY')} "
+    f"ELEVENLABS_API_KEY={_env_flag('ELEVENLABS_API_KEY')} "
+    f"ELEVENLABS_VOICE_ID={_env_flag('ELEVENLABS_VOICE_ID')}",
+    flush=True,
+)
+
 
 # ---- API Keys (运行时读取，兼容 Railway 注入) ----
 MINIMAX_MODEL = "MiniMax-Text-01"
+REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "ELEVENLABS_API_KEY")
+
+
+def _validate_required_env():
+    missing = [name for name in REQUIRED_ENV_VARS if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError(
+            "Missing required environment variables: "
+            + ", ".join(missing)
+            + ". Set them in Railway Variables or local .env."
+        )
+
+
+_validate_required_env()
 
 def get_minimax_key():
     return os.environ.get("MINIMAX_API_KEY", "")
