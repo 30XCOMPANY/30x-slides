@@ -44,18 +44,17 @@ else:
 FONT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# ---- MiniMax LLM ----
-MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
+# ---- API Keys (运行时读取，兼容 Railway 注入) ----
 MINIMAX_MODEL = "MiniMax-Text-01"
 
-# ---- ElevenLabs TTS ----
-ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "HY09gbZLEpQrUZjrJgJv")
+def get_minimax_key():
+    return os.environ.get("MINIMAX_API_KEY", "")
 
-# ---- 启动校验 ----
-print(f"[BOOT] MINIMAX_API_KEY={'SET' if MINIMAX_API_KEY else 'MISSING'}", flush=True)
-print(f"[BOOT] ELEVENLABS_API_KEY={'SET' if ELEVENLABS_API_KEY else 'MISSING'}", flush=True)
-print(f"[BOOT] ELEVENLABS_VOICE_ID={ELEVENLABS_VOICE_ID}", flush=True)
+def get_elevenlabs_key():
+    return os.environ.get("ELEVENLABS_API_KEY", "")
+
+def get_elevenlabs_voice():
+    return os.environ.get("ELEVENLABS_VOICE_ID", "HY09gbZLEpQrUZjrJgJv")
 
 
 
@@ -295,7 +294,7 @@ def chat_with_llm(messages):
         data=payload.encode("utf-8"),
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {MINIMAX_API_KEY}",
+            "Authorization": f"Bearer {get_minimax_key()}",
         },
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -483,7 +482,7 @@ def api_tts():
     print(f"[TTS] ElevenLabs request: {len(text)} chars", flush=True)
 
     try:
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}/stream"
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{get_elevenlabs_voice()}/stream"
         payload = json.dumps({
             "text": text,
             "model_id": "eleven_turbo_v2_5",
@@ -497,7 +496,7 @@ def api_tts():
             data=payload.encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
-                "xi-api-key": ELEVENLABS_API_KEY,
+                "xi-api-key": get_elevenlabs_key(),
                 "Accept": "audio/mpeg",
             },
         )
