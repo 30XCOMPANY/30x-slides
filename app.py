@@ -16,7 +16,10 @@ import base64
 import subprocess
 import urllib.request
 import threading
+import tempfile
+import time
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
@@ -231,35 +234,75 @@ def extract_slide_content(pptx_path):
 # ============================================================
 # 转换管线
 # ============================================================
-def convert_deck(deck_dir):
-    pptx_path = os.path.join(deck_dir, "deck.pptx")
+def convert_pptx_to_pdf(pptx_path, deck_dir):
+    pdf_path = os.path.join(deck_dir, "deck.pdf")
+    soffice_profile = Path(tempfile.mkdtemp(prefix="soffice-profile-", dir=deck_dir))
+    profile_uri = soffice_profile.resolve().as_uri()
 
-    # ---- LibreOffice 无头渲染 ----
     print(f"[CONVERT] LibreOffice starting: {pptx_path}", flush=True)
     result = subprocess.run(
-        ["soffice", "--headless", "--convert-to", "pdf", pptx_path, "--outdir", deck_dir],
-        capture_output=True, text=True, timeout=120,
+        [
+            "soffice",
+            "--headless",
+            f"-env:UserInstallation={profile_uri}",
+            "--convert-to",
+            "pdf",
+            pptx_path,
+            "--outdir",
+            deck_dir,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     print(f"[CONVERT] LibreOffice done, rc={result.returncode}", flush=True)
     if result.returncode != 0:
         print(f"[CONVERT ERROR] {result.stderr}", flush=True)
         raise RuntimeError(f"LibreOffice failed: {result.stderr}")
-    doc = fitz.open(os.path.join(deck_dir, "deck.pdf"))
-    total = len(doc)
-    for i in range(total):
-        page = doc[i]
-        mat = fitz.Matrix(1920 / page.rect.width, 1080 / page.rect.height)
-        pix = page.get_pixmap(matrix=mat)
-        pix.save(os.path.join(deck_dir, f"slide-{i + 1}.png"))
-    doc.close()
+    return pdf_path
+
+
+def render_pdf_page(pdf_path, page_index, target_width=1920, target_height=1080):
+    doc = fitz.open(pdf_path)
+    try:
+        page = doc[page_index]
+        matrix = fitz.Matrix(target_width / page.rect.width, target_height / page.rect.height)
+        pix = page.get_pixmap(matrix=matrix, alpha=False)
+        output_path = os.path.join(os.path.dirname(pdf_path), f"slide-{page_index + 1}.png")
+        pix.save(output_path)
+        return output_path
+    finally:
+        doc.close()
+
+
+def render_pdf_pages(pdf_path):
+    with fitz.open(pdf_path) as doc:
+        total = len(doc)
+
+    workers = max(1, min(4, (os.cpu_count() or 1)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        list(executor.map(lambda idx: render_pdf_page(pdf_path, idx), range(total)))
+    return total
+
+
+def convert_deck(deck_dir):
+    pptx_path = os.path.join(deck_dir, "deck.pptx")
+    started_at = time.perf_counter()
+    pdf_path = convert_pptx_to_pdf(pptx_path, deck_dir)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        raster_future = executor.submit(render_pdf_pages, pdf_path)
+        content_future = executor.submit(extract_slide_content, pptx_path)
+        total = raster_future.result()
+        content = content_future.result()
+
     with open(os.path.join(deck_dir, "meta.txt"), "w") as f:
         f.write(str(total))
-
-    # ---- 提取文字内容 ----
-    content = extract_slide_content(pptx_path)
     with open(os.path.join(deck_dir, "content.json"), "w") as f:
         json.dump(content, f, ensure_ascii=False)
 
+    elapsed = time.perf_counter() - started_at
+    print(f"[CONVERT] deck={os.path.basename(deck_dir)} slides={total} elapsed={elapsed:.2f}s", flush=True)
     return total
 
 
