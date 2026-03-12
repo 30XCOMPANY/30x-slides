@@ -55,6 +55,8 @@ def _env_flag(name):
 print(
     f"[BOOT] cwd={os.getcwd()} file_dir={Path(__file__).parent} "
     f"MINIMAX_API_KEY={_env_flag('MINIMAX_API_KEY')} "
+    f"FISH_AUDIO_API_KEY={_env_flag('FISH_AUDIO_API_KEY')} "
+    f"FISH_AUDIO_REFERENCE_ID={_env_flag('FISH_AUDIO_REFERENCE_ID')} "
     f"ELEVENLABS_API_KEY={_env_flag('ELEVENLABS_API_KEY')} "
     f"ELEVENLABS_VOICE_ID={_env_flag('ELEVENLABS_VOICE_ID')}",
     flush=True,
@@ -69,7 +71,7 @@ MINIMAX_API_CANDIDATES = (
     "https://api.minimaxi.com/v1/chat/completions",
     "https://api.minimaxi.com/v1/text/chatcompletion_v2",
 )
-REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "ELEVENLABS_API_KEY")
+REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "FISH_AUDIO_API_KEY")
 
 
 def _clean_env_value(value):
@@ -96,6 +98,14 @@ def get_elevenlabs_key():
 
 def get_elevenlabs_voice():
     return _clean_env_value(os.environ.get("ELEVENLABS_VOICE_ID", "HY09gbZLEpQrUZjrJgJv"))
+
+def get_fish_audio_key():
+    return _clean_env_value(os.environ.get("FISH_AUDIO_API_KEY", ""))
+
+def get_fish_audio_reference_id():
+    return _clean_env_value(
+        os.environ.get("FISH_AUDIO_REFERENCE_ID", os.environ.get("FISH_AUDIO_VOICE_ID", ""))
+    )
 
 
 
@@ -616,31 +626,28 @@ def api_talk(deck_id):
 
 @app.route("/api/tts", methods=["POST"])
 def api_tts():
-    """ElevenLabs streaming TTS — 返回 audio/mpeg 流"""
+    """Fish Audio TTS — 返回 base64 mp3"""
     data = request.json
     text = data.get("text", "").strip()
     if not text:
         return jsonify({"audio": ""})
 
-    print(f"[TTS] ElevenLabs request: {len(text)} chars", flush=True)
+    print(f"[TTS] Fish Audio request: {len(text)} chars", flush=True)
 
     try:
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{get_elevenlabs_voice()}/stream"
+        url = "https://api.fish.audio/v1/tts"
         payload = json.dumps({
             "text": text,
-            "model_id": "eleven_turbo_v2_5",
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-            },
+            "reference_id": get_fish_audio_reference_id(),
+            "format": "mp3",
         })
         req = urllib.request.Request(
             url,
             data=payload.encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
-                "xi-api-key": get_elevenlabs_key(),
-                "Accept": "audio/mpeg",
+                "Authorization": f"Bearer {get_fish_audio_key()}",
+                "model": "s2-pro",
             },
         )
 
@@ -648,7 +655,7 @@ def api_tts():
             audio_bytes = resp.read()
 
         audio_b64 = base64.b64encode(audio_bytes).decode()
-        print(f"[TTS] ElevenLabs OK: {len(audio_bytes)} bytes", flush=True)
+        print(f"[TTS] Fish Audio OK: {len(audio_bytes)} bytes", flush=True)
         return jsonify({"audio": audio_b64})
     except Exception as e:
         print(f"[TTS ERROR] {e}", flush=True)
