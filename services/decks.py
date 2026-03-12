@@ -29,6 +29,10 @@ STOPWORDS = {
 NAV_INTENT_PATTERNS = (
     "go to", "jump to", "take me to", "show me", "move to", "switch to",
     "next slide", "previous slide", "go back", "next one", "slide ",
+    "tell me about", "talk about", "what about", "interested in",
+    "want to know", "want to learn", "want to see", "let's look at",
+    "let's talk about", "can you explain", "explain the", "more about",
+    "dig into", "start with", "cover the", "walk me through",
 )
 INTERACTIVE_FOLLOW_UPS = (
     "Do you want the short version, the deeper takeaway, or the next slide?",
@@ -462,43 +466,51 @@ def infer_navigation_target(user_text, all_content, current_slide_idx):
             best_score = score
             best_slide = candidate["slide"]
 
-    return str(best_slide) if best_slide and best_score >= 5 and best_slide != current_slide_number else None
+    return str(best_slide) if best_slide and best_score >= 3 and best_slide != current_slide_number else None
 
 
 def build_greeting(all_content):
+    """Template fallback greeting — used only when LLM is unavailable."""
     synopsis = build_deck_synopsis(all_content)
     if not synopsis:
         return (
-            "Hey, glad you're here. I can map out the big sections in this deck, give you the fast overview, "
-            "and then slow down wherever you want. What do you want to get into first?"
+            "Hey, glad you're here. I can walk you through this deck. "
+            "What do you want to know?"
         )
 
     section_labels = [section["label"] for section in synopsis[:5]]
-    spoken_concepts = [section["spoken_concept"] for section in synopsis[:5]]
-    section_text = join_phrases(spoken_concepts)
-    if len(spoken_concepts) == 1:
-        summary = f"At a high level, the story is really about {spoken_concepts[0]} and why it matters."
-    else:
-        summary = (
-            f"Here is the quick roadmap: it moves through {section_text}. "
-            "So you can immediately see the big pieces in the story, not just a stack of isolated slides."
-        )
+    joined = join_phrases(section_labels)
 
     return (
-        f"Hey, glad you're here. The big sections in this deck are {join_phrases(section_labels)}. "
-        f"{summary} What do you want to start with?"
+        f"Hey, glad you're here. This deck covers {joined}. "
+        "I can break any of that down for you. What do you want to start with?"
     )
+
+
+def build_greeting_prompt(all_content):
+    """Build a system prompt specifically for generating the greeting with deck summary."""
+    slide_overview = ""
+    for sc in all_content:
+        title = get_slide_title(sc)
+        body = " | ".join(sc.get("text", [])[:3])
+        slide_overview += f"  Slide {sc['slide']}: {title} — {body}\n"
+
+    return f"""You are a friendly slide guide greeting a new viewer. Your job:
+
+1. Say hi naturally (one short sentence).
+2. Give a 2-3 sentence SUMMARY of what this entire deck is about — the story, the argument, the key message. Synthesize, don't list slide titles. Talk about it like you're telling a friend what this presentation is about.
+3. End with one short question asking what they want to explore.
+
+Total length: 4-6 sentences max. Spoken voice only — no markdown, no bullets.
+
+DECK CONTENT:
+{slide_overview}"""
 
 
 def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
     """Fallback explanation when the hosted LLM is unavailable."""
     if not all_content:
-        return (
-            "I can keep going, but I need the slide content loaded first. "
-            "Right now I do not have the actual slide details. "
-            "Once the content is loaded, I can break it down clearly. "
-            "Do you want the quick summary, the key takeaway, or the slide-by-slide version?"
-        )
+        return "I don't have the slide content loaded yet. Want me to try again?"
 
     if current_slide_idx < 0 or current_slide_idx >= len(all_content):
         current_slide_idx = 0
@@ -511,34 +523,23 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
 
     if not body_lines:
         return (
-            f"This slide is setting up {title}. "
-            "It is more about framing the main idea than dumping detail all at once. "
-            "So the useful read here is the direction it wants you to notice. "
-            f"{interactive_follow_up(user_text or title, slide_content['slide'])}"
+            f"This slide sets up {title}. "
+            "Want me to go deeper or move to the next one?"
         )
 
     concept_text = join_phrases(concepts[:3])
-    first = body_lines[0]
-    sentences = [f"This slide is really about {title}."]
+    parts = [f"This one is about {title}."]
+
     if concept_text:
-        sentences.append(f"The core idea is how {concept_text} connect in one story.")
-    else:
-        sentences.append(f"The core idea is {first}.")
+        parts.append(f"The key points are {concept_text}.")
+    elif body_lines:
+        parts.append(f"Mainly, {body_lines[0]}.")
 
     if len(body_lines) > 1:
-        sentences.append(
-            f"What matters most is not each bullet by itself, but the pattern between {body_lines[0]} and {body_lines[1]}."
-        )
-    else:
-        sentences.append("So the slide is trying to give you one clear takeaway, not just a list to read aloud.")
+        parts.append(f"It also touches on {body_lines[1]}.")
 
-    if len(body_lines) > 2:
-        sentences.append(f"The extra detail here is {body_lines[2]}, which gives the main point more weight.")
-    else:
-        sentences.append("That is the practical read of this slide once you strip away the presentation wording.")
-
-    sentences.append(interactive_follow_up(user_text or title, slide_content["slide"]))
-    return " ".join(sentences[:5])
+    parts.append("Want me to unpack anything here, or move on?")
+    return " ".join(parts[:4])
 
 
 def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True):
@@ -594,17 +595,14 @@ NAVIGATION:
 Do not output control tags or bracketed commands.
 Answer naturally only. Navigation is handled outside the model."""
 
-    return f"""You explain slide content like a sharp human presenter. Talk about the idea underneath the slide, not the slide wording itself.
+    return f"""You are a friendly slide guide. Explain ideas behind slides, not the literal text.
 
-Spoken voice only. No markdown, no bullets, no lists.
-
-VIBE: Casual, warm, and tutor-like. Sound like a smart human guide, not a narrator.
-
-NEVER read bullets line by line. Synthesize. Compress. Explain what the slide is trying to say and why it matters.
-
-[GREET]: EXACT STRUCTURE: first greet the user naturally, then summarize the deck in plain language with 2-4 major themes, then ask what they want to understand first. End with a question like "What do you want to understand first?" Do NOT include [GO:N].
-
-REPLIES: ALWAYS 3-5 short sentences. The last sentence MUST be interactive and invite the user to choose a next move. Vary the final question naturally. Do not reuse the exact same closing line every time.
+RULES:
+- Spoken voice only. No markdown, bullets, or lists.
+- Casual and warm. Like a smart friend explaining something.
+- Synthesize, don't read bullets. Say what the slide means and why it matters.
+- Keep replies to 3-5 short sentences. End with a natural question or offer.
+- Never repeat what you just said in the same turn.
 
 Viewer is on Slide {current_slide_idx + 1} of {len(all_content)}.
 

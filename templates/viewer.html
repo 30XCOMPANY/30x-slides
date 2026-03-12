@@ -462,11 +462,8 @@ function showBotText(t)  { subtitleBot.textContent = t; subtitleBot.classList.ad
 function hideSubtitle()  { subtitleArea.classList.remove('show'); subtitleUser.classList.remove('show'); subtitleBot.classList.remove('show'); }
 
 function startGreeting() {
-  const greeting = greetingText || 'Hey, good to have you here. I can walk you through the main sections, give you the big-picture summary, and then go deeper wherever you want. What do you want to dig into first?';
-  isBusy = false;
-  streamDone = true;
-  showBotText(greeting);
-  enqueueSentenceSpeech(greeting);
+  /* 走 LLM 生成真正的 deck summary，不再用模板文本 */
+  talkToBot('[GREET]');
 }
 
 const thinkingLines = ['Brewing something good', 'One sec, brain loading', 'Consulting the slide gods', 'Almost there, hang tight', 'Crunching the slides', 'Let me cook'];
@@ -700,6 +697,7 @@ function killAudio() {
   clearTimeout(pendingSpeechTimer);
   pendingSpeechTimer = null;
   pendingSpeechText = '';
+  pendingSentenceCount = 0;
   speechQueue = [];
 }
 
@@ -723,7 +721,11 @@ function maybeResumeMic() {
   if (currentAudio) return;
   if (pendingSpeechText.trim()) return;
   if (speechQueue.length) return;
-  openMic();
+  /* 延迟 800ms 再开 mic, 避免捡到 TTS 回声 → 重复 greeting */
+  setTimeout(() => {
+    if (!conversationMode || isBusy || currentAudio || speechQueue.length) return;
+    openMic();
+  }, 800);
 }
 
 function playNextQueuedSentence() {
@@ -763,22 +765,28 @@ function flushPendingSpeech() {
   const cleaned = pendingSpeechText.trim();
   pendingSpeechText = '';
   pendingSpeechTimer = null;
+  pendingSentenceCount = 0;
   if (!cleaned) return;
   speechQueue.push(cleaned);
   playNextQueuedSentence();
 }
 
+let pendingSentenceCount = 0;
+
 function enqueueSentenceSpeech(text) {
   const cleaned = (text || '').trim();
   if (!cleaned) return;
   pendingSpeechText = pendingSpeechText ? `${pendingSpeechText} ${cleaned}` : cleaned;
+  pendingSentenceCount++;
   clearTimeout(pendingSpeechTimer);
-  const shouldFlushNow = /[.!?]["']?$/.test(cleaned) || pendingSpeechText.length >= 220;
+  /* 攒 2+ 句 或 280+ 字符再发 TTS, 减少网络请求数, 消除句间空白 */
+  const shouldFlushNow = pendingSentenceCount >= 2 || pendingSpeechText.length >= 280;
   if (shouldFlushNow) {
     flushPendingSpeech();
     return;
   }
-  pendingSpeechTimer = setTimeout(flushPendingSpeech, 180);
+  /* 如果 400ms 内没新句子来, 也发出去 (避免最后一句卡住) */
+  pendingSpeechTimer = setTimeout(flushPendingSpeech, 400);
 }
 </script>
 </body>

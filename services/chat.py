@@ -17,6 +17,7 @@ from services.config import (
 )
 from services.decks import (
     build_greeting,
+    build_greeting_prompt,
     interactive_follow_up,
     build_local_slide_reply,
     build_system_prompt,
@@ -71,12 +72,12 @@ def chat_with_llm(system_prompt, messages):
     payload = {
         "model": LLM_MODEL,
         "messages": build_openrouter_messages(system_prompt, messages),
-        "max_tokens": 96,
-        "temperature": 0.5,
+        "max_tokens": 200,
+        "temperature": 0.6,
     }
     url = f"{get_openrouter_base_url()}/chat/completions"
 
-    with httpx.Client(timeout=8.0) as client:
+    with httpx.Client(timeout=10.0) as client:
         response = client.post(url, headers=build_openrouter_headers(), json=payload)
         response.raise_for_status()
         content = extract_openrouter_text(response.json()) or "I'm not sure how to respond to that."
@@ -92,8 +93,8 @@ def stream_chat_with_llm(system_prompt, messages):
     payload = {
         "model": LLM_MODEL,
         "messages": build_openrouter_messages(system_prompt, messages),
-        "max_tokens": 128,
-        "temperature": 0.5,
+        "max_tokens": 200,
+        "temperature": 0.6,
         "stream": True,
     }
     url = f"{get_openrouter_base_url()}/chat/completions"
@@ -122,22 +123,26 @@ def stream_chat_with_llm(system_prompt, messages):
 def ensure_interactive_ending(reply):
     reply = (reply or "").strip()
     if not reply:
-        return interactive_follow_up("empty", 0)
+        return "What would you like to know?"
+
+    # 已经有问句或邀请性结尾的，原样返回
+    if reply.rstrip()[-1] == "?":
+        return reply
 
     interactive_markers = (
         "do you want", "want the", "should i", "which part", "where do you want",
         "how do you want", "want me to", "what do you want", "what would you like",
-        "which section", "what do you want to start", "what do you want to dig into",
+        "which section", "want to", "move on", "next one",
     )
     if any(marker in reply.lower() for marker in interactive_markers):
         return reply
 
     if reply[-1] not in ".!?":
         reply += "."
-    return reply + " " + interactive_follow_up(reply, 0)
+    return reply
 
 
-def trim_spoken_reply(reply, max_chars=320, max_words=55):
+def trim_spoken_reply(reply, max_chars=480, max_words=80):
     reply = re.sub(r"\s+", " ", (reply or "")).strip()
     if not reply:
         return ""
@@ -271,28 +276,26 @@ def stream_talk_response(deck_id, payload, output_folder):
     messages = ctx["messages"]
     history = ctx["history"]
 
-    if text == "[GREET]":
-        raw_reply = build_greeting(all_content)
-        history.append({"role": "assistant", "content": raw_reply})
-        yield from stream_scripted_reply(raw_reply, inferred_nav)
-        return
-
     if normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
-        raw_reply = (
-            "I am here with you. You can ask about this slide, ask for the bigger picture, "
-            "or name a section you want to jump into. What do you want to look at first?"
-        )
+        raw_reply = "Hey! Ask me anything about this slide, or name a topic to jump to."
         history.append({"role": "assistant", "content": raw_reply})
         yield from stream_scripted_reply(raw_reply, None)
         return
 
-    if should_use_local_explainer(text):
+    if text != "[GREET]" and should_use_local_explainer(text):
         raw_reply = build_local_slide_reply(all_content, slide_idx, text)
         history.append({"role": "assistant", "content": raw_reply})
         yield from stream_scripted_reply(raw_reply, inferred_nav)
         return
 
-    system_prompt = build_system_prompt(all_content, slide_idx, allow_control_tags=False)
+    # [GREET] 走 LLM 生成真正的 deck summary; 其他问题也走 LLM
+    if text == "[GREET]":
+        system_prompt = build_greeting_prompt(all_content)
+        fallback_fn = lambda: build_greeting(all_content)
+    else:
+        system_prompt = build_system_prompt(all_content, slide_idx, allow_control_tags=False)
+        fallback_fn = lambda: build_local_slide_reply(all_content, slide_idx, text)
+
     visible = ""
     sentence_buffer = ""
     completed_sentences = []
@@ -306,11 +309,11 @@ def stream_talk_response(deck_id, payload, output_folder):
             complete, sentence_buffer = split_completed_sentences(sentence_buffer)
             for sentence in complete:
                 completed_sentences.append(sentence)
-                if len(completed_sentences) <= 5:
+                if len(completed_sentences) <= 6:
                     yield emit_event("sentence", text=sentence)
     except Exception as exc:
         print(f"[LLM STREAM ERROR] {exc}", flush=True)
-        fallback_reply = build_local_slide_reply(all_content, slide_idx, text)
+        fallback_reply = fallback_fn()
 
     if fallback_reply:
         history.append({"role": "assistant", "content": fallback_reply})
@@ -319,13 +322,13 @@ def stream_talk_response(deck_id, payload, output_folder):
 
     if sentence_buffer.strip():
         completed_sentences.append(sentence_buffer.strip())
-        if len(completed_sentences) <= 5:
+        if len(completed_sentences) <= 6:
             yield emit_event("sentence", text=sentence_buffer.strip())
 
     raw_reply = " ".join(completed_sentences).strip()
     raw_reply = trim_spoken_reply(raw_reply)
     history.append({"role": "assistant", "content": raw_reply})
-    yield emit_event("done", text=raw_reply, nav=inferred_nav)
+    yield emit_event("done", text=raw_reply, nav=inferred_nav if text != "[GREET]" else None)
 
 
 def build_talk_response(deck_id, payload, output_folder):
@@ -342,25 +345,20 @@ def build_talk_response(deck_id, payload, output_folder):
     messages = ctx["messages"]
     system_prompt = build_system_prompt(all_content, slide_idx)
 
-    if text == "[GREET]":
-        raw_reply = build_greeting(all_content)
-        print(f"[GREET LOCAL] {raw_reply}", flush=True)
-    elif normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
-        raw_reply = (
-            "I am here with you. You can ask about this slide, ask for the bigger picture, "
-            "or name a section you want to jump into. What do you want to look at first?"
-        )
+    if normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
+        raw_reply = "Hey! Ask me anything about this slide, or name a topic to jump to."
         print(f"[SMALLTALK LOCAL] {raw_reply}", flush=True)
-    elif should_use_local_explainer(text):
+    elif text != "[GREET]" and should_use_local_explainer(text):
         raw_reply = build_local_slide_reply(all_content, slide_idx, text)
         print(f"[LOCAL FAST] {raw_reply[:120]}", flush=True)
     else:
+        greet_prompt = build_greeting_prompt(all_content) if text == "[GREET]" else None
         try:
-            raw_reply = chat_with_llm(system_prompt, messages)
+            raw_reply = chat_with_llm(greet_prompt or system_prompt, messages)
             print(f"[LLM] {raw_reply[:120]}", flush=True)
         except Exception as exc:
             print(f"[LLM ERROR] {exc}", flush=True)
-            raw_reply = build_local_slide_reply(all_content, slide_idx, text)
+            raw_reply = build_greeting(all_content) if text == "[GREET]" else build_local_slide_reply(all_content, slide_idx, text)
 
     spoken_reply, nav_command = parse_nav_command(raw_reply)
     if inferred_nav and not nav_command:

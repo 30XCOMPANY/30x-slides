@@ -30,6 +30,7 @@ def synthesize_fish_audio(text):
         "text": text,
         "reference_id": get_fish_audio_reference_id(),
         "format": "mp3",
+        "prosody": {"speed": 1.2},
     })
     request = urllib.request.Request(
         FISH_HTTP_URL,
@@ -78,8 +79,9 @@ def stream_fish_audio(text):
                     "text": "",
                     "format": "mp3",
                     "reference_id": get_fish_audio_reference_id(),
-                    "chunk_length": 120,
-                    "latency": "balanced",
+                    "chunk_length": 150,
+                    "latency": "normal",
+                    "prosody": {"speed": 1.2},
                 },
             )
         )
