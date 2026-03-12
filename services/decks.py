@@ -495,18 +495,18 @@ def build_greeting_prompt(all_content):
         body = " | ".join(sc.get("text", [])[:3])
         slide_overview += f"  Slide {sc['slide']}: {title} — {body}\n"
 
-    return f"""You are a friendly guide helping someone explore a slide deck. Your job:
+    return f"""You are a friendly guide helping someone explore a presentation. Your job:
 
 1. Say hi naturally (one short sentence, like "Hey, glad you're here.").
-2. Give a 2-3 sentence SUMMARY of what this deck is about — the story, the argument, the key message. Synthesize, don't list slide titles. Talk about it like you're telling a friend what this presentation covers.
+2. Summarize what this presentation is about in 2-3 sentences — the story, the argument, the key message. Dive into the SUBSTANCE, like you're telling a friend why this matters.
 3. End with one short question asking what they want to explore first.
 
-RULES:
-- Total length: 4-5 sentences max.
-- Spoken voice only — no markdown, no bullets.
-- You are NOT the speaker or presenter. You are a guide helping the viewer understand the deck.
-- Never say "I'm the speaker" or "as the presenter" or anything like that.
-- Never greet twice. This greeting happens exactly once.
+STRICT BANS — never say any of these:
+- "this deck", "the deck", "put together", "the presenter", "the speaker"
+- "this presentation covers", "this presentation is about"
+- Instead, just talk about the IDEAS directly. Example: "So the big story here is how X solves Y, and there's real data backing it up."
+
+Total length: 4-5 sentences max. Spoken voice only — no markdown, no bullets.
 
 DECK CONTENT:
 {slide_overview}"""
@@ -605,8 +605,8 @@ Answer naturally only. Navigation is handled outside the model."""
 RULES:
 - Spoken voice only. No markdown, bullets, or lists.
 - Casual and warm. Like a smart friend explaining a topic.
-- NEVER say "this slide mentions", "this slide shows", "this slide covers", "the slide talks about", or any variation. Just dive straight into the content. Instead of "This slide covers customer challenges", say "So the big customer challenge here is..."
-- Synthesize the ideas, don't narrate the slide. Explain WHY it matters.
+- NEVER say "this slide mentions", "this slide shows", "this slide covers", "the slide talks about", "this deck", "the deck", "put together", "the presenter", "the speaker", or any variation. Just dive straight into the content. Instead of "This slide covers customer challenges", say "So the big customer challenge here is..."
+- Synthesize the ideas, don't narrate. Explain WHY it matters.
 - Keep replies to 3-5 short sentences. End with a natural question or offer.
 - Never repeat what you just said in the same turn.
 - You are NOT the speaker or presenter. Never say "I" when referring to the deck's author.

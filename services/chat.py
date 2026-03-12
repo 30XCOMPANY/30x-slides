@@ -287,24 +287,36 @@ def stream_talk_response(deck_id, payload, output_folder):
         system_prompt = build_greeting_prompt(all_content)
         fallback_fn = lambda: build_greeting(all_content)
     else:
-        system_prompt = build_system_prompt(all_content, slide_idx, allow_control_tags=False)
+        system_prompt = build_system_prompt(all_content, slide_idx, allow_control_tags=True)
         fallback_fn = lambda: build_local_slide_reply(all_content, slide_idx, text)
 
     visible = ""
     sentence_buffer = ""
     completed_sentences = []
     fallback_reply = None
+    llm_nav = None  # LLM 自己决定的 [GO:N] 导航
+
+    def strip_nav_tag(s):
+        """从文本中提取并移除 [GO:...] 标签"""
+        nonlocal llm_nav
+        match = re.search(r"\[GO:(\w+)\]", s)
+        if match:
+            llm_nav = match.group(1)
+            s = re.sub(r"\s*\[GO:\w+\]\s*", " ", s).strip()
+        return s
 
     try:
         for delta in stream_chat_with_llm(system_prompt, messages):
             sentence_buffer += delta
             visible += delta
-            yield emit_event("text", text=visible.strip())
+            yield emit_event("text", text=strip_nav_tag(visible).strip())
             complete, sentence_buffer = split_completed_sentences(sentence_buffer)
             for sentence in complete:
-                completed_sentences.append(sentence)
-                if len(completed_sentences) <= 6:
-                    yield emit_event("sentence", text=sentence)
+                cleaned = strip_nav_tag(sentence)
+                if cleaned:
+                    completed_sentences.append(cleaned)
+                    if len(completed_sentences) <= 6:
+                        yield emit_event("sentence", text=cleaned)
     except Exception as exc:
         print(f"[LLM STREAM ERROR] {exc}", flush=True)
         fallback_reply = fallback_fn()
@@ -315,14 +327,18 @@ def stream_talk_response(deck_id, payload, output_folder):
         return
 
     if sentence_buffer.strip():
-        completed_sentences.append(sentence_buffer.strip())
-        if len(completed_sentences) <= 6:
-            yield emit_event("sentence", text=sentence_buffer.strip())
+        cleaned = strip_nav_tag(sentence_buffer.strip())
+        if cleaned:
+            completed_sentences.append(cleaned)
+            if len(completed_sentences) <= 6:
+                yield emit_event("sentence", text=cleaned)
 
     raw_reply = " ".join(completed_sentences).strip()
     raw_reply = trim_spoken_reply(raw_reply)
     history.append({"role": "assistant", "content": raw_reply})
-    yield emit_event("done", text=raw_reply, nav=inferred_nav if text != "[GREET]" else None)
+    # LLM 的 [GO:N] 优先, 否则用关键词推断
+    final_nav = llm_nav or (inferred_nav if text != "[GREET]" else None)
+    yield emit_event("done", text=raw_reply, nav=final_nav)
 
 
 def build_talk_response(deck_id, payload, output_folder):
