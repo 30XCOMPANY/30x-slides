@@ -15,6 +15,11 @@ GENERIC_THEME_TITLES = {
     "problem", "solution", "roi", "results", "summary", "overview", "agenda",
     "intro", "introduction", "closing", "next steps", "appendix", "why now",
 }
+ABSTRACT_POSITIONING_TOKENS = {
+    "innovation", "innovative", "excellence", "vision", "mission", "leadership",
+    "strategy", "values", "value", "culture", "future", "transformation",
+    "philosophy", "commitment", "platform", "framework", "principles",
+}
 STOPWORDS = {
     "the", "and", "for", "with", "from", "that", "this", "into", "about", "your",
     "have", "will", "what", "when", "where", "which", "their", "there", "here",
@@ -170,6 +175,14 @@ def is_weak_theme_phrase(phrase):
     return False
 
 
+def is_abstract_positioning_phrase(phrase):
+    tokens = meaningful_tokens(phrase)
+    if not tokens:
+        return True
+    abstract_hits = sum(1 for token in tokens if token in ABSTRACT_POSITIONING_TOKENS)
+    return abstract_hits >= max(1, len(tokens) - 1)
+
+
 def extract_theme_phrases(all_content, limit=4):
     scores = {}
     ordered = []
@@ -242,9 +255,9 @@ def summarize_slide_core(slide_content):
 def choose_synopsis_section_count(total_slides):
     if total_slides >= 18:
         return 5
-    if total_slides >= 8:
+    if total_slides >= 6:
         return 4
-    return max(3, min(4, total_slides))
+    return max(4, min(5, total_slides))
 
 
 def partition_slide_ranges(total_slides, section_count):
@@ -287,6 +300,10 @@ def best_section_phrase(section_slides):
 
             score = 5 if phrase in title_phrases else 3
             if offset == 0:
+                score += 1
+            if is_abstract_positioning_phrase(phrase):
+                score -= 3
+            if len(meaningful_tokens(phrase)) >= 3:
                 score += 1
             phrase_scores[normalized]["score"] += score
 
@@ -413,12 +430,12 @@ def build_greeting(all_content):
         summary = f"At a high level, the story is really about {section_labels[0]} and why it matters."
     else:
         summary = (
-            f"So the deck moves through {section_text}, "
-            "and turns those sections into one clear story instead of leaving them as disconnected slides."
+            f"Here is the quick roadmap: it moves through {section_text}. "
+            "So you can immediately see the big pieces in the story, not just a stack of isolated slides."
         )
 
     return (
-        f"Hey, glad you're here. The main sections here are {section_text}. "
+        f"Hey, glad you're here. The big sections in this deck are {section_text}. "
         f"{summary} What do you want to start with?"
     )
 
