@@ -1,0 +1,6 @@
+flask
+flask-socketio
+pymupdf
+python-pptx
+lxml
+python-dotenv

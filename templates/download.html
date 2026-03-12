@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>30X Interactive Slides</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --page-bg: #fbfaf8;
+    --surface: #fffefc;
+    --text-strong: #17161c;
+    --text-muted: #67636e;
+    --text-soft: #9a95a1;
+    --line-soft: rgba(43, 36, 56, 0.07);
+    --font-sans: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+    --pill-bg: linear-gradient(#3f3452f0, #312841f5);
+    --pill-shadow: inset 0 1px rgba(255,255,255,0.14), 0 8px 18px rgba(67,55,85,0.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--page-bg); overflow: hidden;
+    font-family: var(--font-sans); -webkit-font-smoothing: antialiased;
+    height: 100vh; color: var(--text-strong);
+  }
+
+  .slide {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    padding: 16px 16px 88px;
+  }
+  .slide.active { display: flex; }
+  .slide img {
+    width: 100%; height: 100%; object-fit: contain;
+    border-radius: 16px; box-shadow: 0 20px 36px rgba(23,19,33,.06);
+  }
+
+  /* ---- Bottom bar ---- */
+  .bottom-bar {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 2px; z-index: 10;
+    background: var(--surface); padding: 4px;
+    border-radius: 999px; border: 1px solid var(--line-soft);
+    box-shadow: 0 4px 16px rgba(23, 19, 33, 0.06);
+  }
+  .bottom-bar .divider {
+    width: 1px; height: 20px; background: var(--line-soft); margin: 0 4px;
+  }
+
+  .bar-btn {
+    background: none; border: none; color: var(--text-muted);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    font-size: 13px; font-family: inherit; font-weight: 500;
+    transition: all 0.15s; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .bar-btn:hover { background: var(--pill-bg); color: #fff; box-shadow: var(--pill-shadow); }
+  .bar-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .bar-btn.recording {
+    background: #e53935; color: #fff;
+    animation: pulse 1.2s ease infinite;
+  }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(229,57,53,0.3); } 50% { box-shadow: 0 0 0 8px rgba(229,57,53,0); } }
+
+  .bar-counter {
+    color: var(--text-soft); font-size: 12px; padding: 0 10px;
+    min-width: 48px; text-align: center; user-select: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bar-select {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 12px; font-family: inherit; font-weight: 500;
+    padding: 6px 8px; border-radius: 8px; cursor: pointer; outline: none;
+    appearance: none; -webkit-appearance: none;
+  }
+  .bar-select:hover { background: rgba(43,36,56,0.04); }
+
+  /* ---- Subtitle ---- */
+  .subtitle {
+    position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%);
+    max-width: 600px; text-align: center;
+    background: rgba(23, 19, 33, 0.75); color: #fff;
+    padding: 10px 20px; border-radius: 12px;
+    font-size: 14px; font-weight: 400; line-height: 1.5;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    z-index: 8; opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .subtitle.show { opacity: 1; }
+
+  /* ---- Offline banner ---- */
+  .offline-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+    display: none; padding: 8px 16px; background: rgba(255,243,205,0.95);
+    color: #856404; font-size: 12px; text-align: center;
+    border-bottom: 1px solid #ffc107; font-weight: 500;
+  }
+  .offline-banner.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="offline-banner" id="offlineBanner">Voice assistant requires server connection. Slides work offline.</div>
+
+<!-- ---- Slides (base64 embedded) ---- -->
+{% for b64 in slides_data %}
+<div class="slide{{ ' active' if loop.index == 1 }}">
+  <img src="data:image/png;base64,{{ b64 }}" alt="Slide {{ loop.index }}">
+</div>
+{% endfor %}
+
+<!-- ---- Subtitle ---- -->
+<div class="subtitle" id="subtitle"></div>
+
+<!-- ---- Bottom bar ---- -->
+<div class="bottom-bar">
+  <button class="bar-btn" onclick="go(-1)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  <div class="bar-counter" id="counter"></div>
+  <button class="bar-btn" onclick="go(1)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+  </button>
+
+  <div class="divider"></div>
+
+  <button class="bar-btn" id="micBtn" onclick="toggleMic()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    <span id="micLabel">Talk</span>
+  </button>
+
+  <div class="divider"></div>
+
+  <select class="bar-select" id="voiceSelect">
+    {% for vid, vname in voices.items() %}
+    <option value="{{ vid }}">{{ vname }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+<script>
+const total = {{ total }};
+const deckId = "{{ deck_id }}";
+const serverUrl = "{{ server_url }}";
+let current = 0;
+
+function go(d) {
+  const s = document.querySelectorAll('.slide');
+  s[current].classList.remove('active');
+  current = (current + d + total) % total;
+  s[current].classList.add('active');
+  document.getElementById('counter').textContent = `${current + 1} / ${total}`;
+}
+document.getElementById('counter').textContent = `1 / ${total}`;
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'ArrowRight' || e.key === ' ') go(1);
+  if (e.key === 'ArrowLeft') go(-1);
+});
+
+/* ============================================================
+   Voice Bot — HTTP POST (connects back to server)
+   ============================================================ */
+let currentAudio = null;
+let isRecording = false;
+let recognition = null;
+let isBusy = false;
+const sessionId = Math.random().toString(36).slice(2);
+
+function getVoice() { return document.getElementById('voiceSelect').value; }
+
+function showSubtitle(text) {
+  const el = document.getElementById('subtitle');
+  el.textContent = text;
+  el.classList.add('show');
+}
+function hideSubtitle() {
+  document.getElementById('subtitle').classList.remove('show');
+}
+
+function goToSlide(n) {
+  if (n < 1 || n > total) return;
+  const s = document.querySelectorAll('.slide');
+  s[current].classList.remove('active');
+  current = n - 1;
+  s[current].classList.add('active');
+  document.getElementById('counter').textContent = `${current + 1} / ${total}`;
+}
+
+async function talkToBot(text) {
+  if (isBusy || !text) return;
+  isBusy = true;
+  showSubtitle('...');
+
+  try {
+    /* Step 1: LLM 回复 (快) */
+    const resp = await fetch(`${serverUrl}/api/talk/${deckId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        slide_index: current,
+        voice: getVoice(),
+        session_id: sessionId,
+      }),
+    });
+    const data = await resp.json();
+    document.getElementById('offlineBanner').classList.remove('show');
+
+    showSubtitle(data.text || '');
+
+    if (data.nav) {
+      if (data.nav === 'next') {
+        if (current < total - 1) goToSlide(current + 2);
+      } else if (data.nav === 'prev') {
+        if (current > 0) goToSlide(current);
+      } else {
+        const n = parseInt(data.nav);
+        if (n >= 1 && n <= total) goToSlide(n);
+      }
+    }
+
+    /* 文字出来后立刻解锁, 用户可以继续说话 */
+    isBusy = false;
+
+    /* Step 2: TTS 音频 (后台加载) */
+    if (data.text) {
+      fetchAudio(data.text, getVoice());
+    } else {
+      setTimeout(hideSubtitle, 3000);
+    }
+  } catch (e) {
+    document.getElementById('offlineBanner').classList.add('show');
+    showSubtitle('Cannot reach server');
+    setTimeout(hideSubtitle, 3000);
+    isBusy = false;
+  }
+}
+
+async function fetchAudio(text, voice) {
+  try {
+    const resp = await fetch(`${serverUrl}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice }),
+    });
+    const data = await resp.json();
+    if (data.audio) playAudio(data.audio);
+    else setTimeout(hideSubtitle, 3000);
+  } catch (e) {
+    setTimeout(hideSubtitle, 3000);
+  }
+}
+
+function toggleMic() {
+  isRecording ? stopMic() : startMic();
+}
+
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+
+  stopAudio();
+
+  recognition = new SR();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    showSubtitle(text);
+    talkToBot(text);
+  };
+  recognition.onerror = () => stopMic();
+  recognition.onend = () => stopMic();
+
+  recognition.start();
+  isRecording = true;
+  document.getElementById('micBtn').classList.add('recording');
+  document.getElementById('micLabel').textContent = 'Listening...';
+}
+
+function stopMic() {
+  if (recognition) { recognition.stop(); recognition = null; }
+  isRecording = false;
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('micLabel').textContent = 'Talk';
+}
+
+function playAudio(b64) {
+  stopAudio();
+  const audio = new Audio('data:audio/mpeg;base64,' + b64);
+  currentAudio = audio;
+  audio.onended = () => {
+    currentAudio = null;
+    setTimeout(() => { if (!currentAudio) hideSubtitle(); }, 2000);
+  };
+  audio.play().catch(() => {});
+}
+
+function stopAudio() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>30X Slides</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  @font-face {
+    font-family: 'Geist Pixel';
+    src: url('https://cdn.jsdelivr.net/npm/geist@1/dist/fonts/geist-pixel/GeistPixel-Square.woff2') format('woff2');
+    font-weight: 400;
+    font-display: swap;
+  }
+
+  :root {
+    --page-bg: #fbfaf8;
+    --surface: #fffefc;
+    --text-strong: #17161c;
+    --text-muted: #67636e;
+    --text-soft: #9a95a1;
+    --line-soft: rgba(43, 36, 56, 0.07);
+    --line-strong: #e6dfeb;
+    --font-sans: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+    --pill-bg: linear-gradient(#3f3452f0, #312841f5);
+    --pill-shadow: inset 0 1px rgba(255,255,255,0.14), 0 8px 18px rgba(67,55,85,0.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--page-bg); overflow: hidden;
+    font-family: var(--font-sans); -webkit-font-smoothing: antialiased;
+    height: 100vh; color: var(--text-strong);
+  }
+
+  /* ---- Slides ---- */
+  .slide {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    padding: 56px 32px 88px;
+  }
+  .slide.active { display: flex; }
+  .slide img {
+    width: 100%; height: 100%; object-fit: contain;
+    border-radius: 16px; box-shadow: 0 20px 36px rgba(23, 19, 33, 0.06);
+  }
+
+  /* ---- Topbar ---- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px; padding: 0 20px; z-index: 30;
+    background: rgba(251, 250, 248, 0.85);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .topbar .brand {
+    font-family: 'Geist Pixel', monospace;
+    font-size: 16px; font-weight: 400; letter-spacing: 0.02em;
+    color: rgba(33, 28, 42, 0.88); text-decoration: none;
+  }
+  .topbar .brand span { opacity: 0.5; }
+  .topbar .actions { display: flex; align-items: center; gap: 8px; }
+  .topbar .link-btn {
+    color: var(--text-soft); text-decoration: none; font-size: 13px;
+    font-weight: 500; padding: 6px 14px; border-radius: 999px;
+    border: none; background: none; cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .topbar .link-btn:hover { color: var(--text-strong); background: rgba(43,36,56,0.04); }
+  .topbar .download-btn {
+    background: var(--pill-bg); color: #fff; border: none;
+    padding: 8px 20px; border-radius: 999px; font-size: 13px;
+    font-family: inherit; font-weight: 600; cursor: pointer;
+    letter-spacing: -0.01em; box-shadow: var(--pill-shadow); transition: all 0.18s;
+  }
+  .topbar .download-btn:hover { background: linear-gradient(#4c3d62f5, #392d4cfa); transform: translateY(-1px); }
+
+  /* ---- Font badge ---- */
+  .font-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; padding: 5px 14px;
+    border-radius: 999px; cursor: pointer; transition: all 0.15s;
+    border: 1px solid transparent; font-family: inherit; letter-spacing: -0.01em;
+  }
+  .font-badge.ok { background: rgba(43,36,56,0.04); color: var(--text-muted); border-color: var(--line-soft); }
+  .font-badge.warn { background: rgba(43,36,56,0.06); color: var(--text-strong); border-color: rgba(43,36,56,0.12); }
+  .font-badge.warn:hover { background: rgba(43,36,56,0.1); }
+
+  /* ---- Font panel (glass modal) ---- */
+  .font-overlay {
+    display: none; position: fixed; inset: 0; z-index: 40;
+    align-items: center; justify-content: center;
+    background: rgba(17,14,24,0.45);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .font-overlay.show { display: flex; }
+  .font-panel {
+    width: 480px; max-height: 80vh; overflow-y: auto;
+    border-radius: 26px; border: 1px solid rgba(255,255,255,0.22);
+    background:
+      linear-gradient(180deg, rgba(255,250,245,0.14), rgba(234,243,251,0.08)),
+      radial-gradient(34% 44% at 28% 36%, rgba(246,221,213,0.11), transparent 74%),
+      radial-gradient(36% 44% at 74% 34%, rgba(223,216,239,0.1), transparent 78%);
+    backdrop-filter: blur(28px) saturate(1.3); -webkit-backdrop-filter: blur(28px) saturate(1.3);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 24px 56px rgba(17,14,24,0.35);
+    padding: 28px; color: rgba(255,255,255,0.94);
+  }
+  .font-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .font-panel-title { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+  .font-panel-close {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.6); width: 28px; height: 28px; border-radius: 8px;
+    font-size: 16px; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; transition: all 0.12s; line-height: 1;
+  }
+  .font-panel-close:hover { background: rgba(255,255,255,0.18); color: #fff; }
+  .section-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 10px; color: rgba(255,255,255,0.35);
+    padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .font-list-ok { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.7; margin-bottom: 22px; }
+  .missing-row { padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .missing-row:last-of-type { border-bottom: none; }
+  .missing-row .font-name { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+  .missing-row .controls { display: flex; gap: 8px; }
+  .glass-select {
+    flex: 1; padding: 8px 12px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.15); font-size: 13px;
+    font-family: inherit; font-weight: 500;
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.85);
+    cursor: pointer; outline: none; appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px;
+  }
+  .glass-select:focus { border-color: rgba(255,255,255,0.35); }
+  .glass-select option { background: #2a2238; color: #fff; }
+  .weight-select { width: 110px; flex: none; }
+  .btn-apply {
+    width: 100%; padding: 12px; border-radius: 14px; border: none;
+    background: rgba(255,255,255,0.92); color: var(--text-strong);
+    font-size: 14px; font-family: inherit; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12); transition: all 0.18s; margin-top: 14px;
+  }
+  .btn-apply:hover { background: #fff; transform: translateY(-1px); }
+  .btn-apply:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+  /* ---- Toast ---- */
+  .toast {
+    position: fixed; top: 68px; left: 50%; transform: translateX(-50%) translateY(-20px);
+    background: var(--text-strong); color: #fff; padding: 8px 20px;
+    border-radius: 999px; font-size: 13px; font-weight: 500; z-index: 50;
+    opacity: 0; transition: all 0.3s ease; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---- Loading ---- */
+  .loading-overlay {
+    display: none; position: fixed; inset: 0; z-index: 45;
+    background: rgba(251,250,248,0.8); backdrop-filter: blur(8px);
+    align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+  }
+  .loading-overlay.show { display: flex; }
+  .loading-overlay .spinner {
+    width: 24px; height: 24px;
+    border: 2px solid var(--line-strong); border-top-color: var(--text-strong);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-overlay p { font-size: 14px; color: var(--text-muted); font-weight: 500; }
+
+  /* ============================================================
+     底部控制栏 — slide 导航 + voice 控制合一
+     ============================================================ */
+  .bottom-bar {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 2px; z-index: 10;
+    background: var(--surface); padding: 4px;
+    border-radius: 999px; border: 1px solid var(--line-soft);
+    box-shadow: 0 4px 16px rgba(23, 19, 33, 0.06);
+  }
+  .bottom-bar .divider {
+    width: 1px; height: 20px; background: var(--line-soft); margin: 0 4px;
+  }
+
+  .bar-btn {
+    background: none; border: none; color: var(--text-muted);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    font-size: 13px; font-family: inherit; font-weight: 500;
+    transition: all 0.15s; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .bar-btn:hover { background: var(--pill-bg); color: #fff; box-shadow: var(--pill-shadow); }
+  .bar-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+  .bar-btn.active {
+    background: var(--pill-bg); color: #fff; box-shadow: var(--pill-shadow);
+  }
+  .bar-btn.recording {
+    background: rgba(229, 57, 53, 0.1); color: #c62828;
+    border: 1px solid rgba(229, 57, 53, 0.25);
+    position: relative;
+  }
+  .bar-btn.recording:hover {
+    background: rgba(229, 57, 53, 0.2);
+  }
+  .bar-btn.recording::before {
+    content: ''; position: absolute; top: 6px; left: 12px;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #e53935; animation: blink 1.5s ease infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .bar-btn.speaking {
+    background: rgba(255, 152, 0, 0.15); color: #e65100;
+    border: 1px solid rgba(255, 152, 0, 0.3);
+  }
+  .bar-btn.speaking:hover {
+    background: rgba(255, 152, 0, 0.25);
+  }
+
+  .bar-counter {
+    color: var(--text-soft); font-size: 12px; padding: 0 10px;
+    min-width: 48px; text-align: center; user-select: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bar-select {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 12px; font-family: inherit; font-weight: 500;
+    padding: 6px 8px; border-radius: 8px; cursor: pointer; outline: none;
+    appearance: none; -webkit-appearance: none;
+  }
+  .bar-select:hover { background: rgba(43,36,56,0.04); }
+
+  /* ---- 字幕区 ---- */
+  .subtitle-area {
+    position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%);
+    max-width: 640px; width: 90%; text-align: center;
+    z-index: 8; pointer-events: none;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .subtitle-area.show { opacity: 1; }
+
+  .subtitle-user {
+    background: rgba(255, 255, 255, 0.85); color: var(--text-strong);
+    padding: 8px 16px; border-radius: 10px;
+    font-size: 13px; font-weight: 500; line-height: 1.4;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    display: none;
+  }
+  .subtitle-user.show { display: block; }
+
+  .subtitle-bot {
+    background: rgba(23, 19, 33, 0.78); color: #fff;
+    padding: 10px 20px; border-radius: 12px;
+    font-size: 14px; font-weight: 400; line-height: 1.5;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    display: none;
+  }
+  .subtitle-bot.show { display: block; }
+
+  /* thinking 动画 */
+  .thinking-dots::after {
+    content: '';
+    animation: dots 1.4s steps(4, end) infinite;
+  }
+  @keyframes dots {
+    0% { content: ''; }
+    25% { content: '.'; }
+    50% { content: '..'; }
+    75% { content: '...'; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ---- Topbar ---- -->
+<div class="topbar">
+  <a href="/" class="brand">30X <span>SLIDES</span></a>
+  <div class="actions">
+    {% if font_report.missing %}
+    <button class="font-badge warn" onclick="toggleFontPanel()">
+      {{ font_report.missing|length }} font{{ 's' if font_report.missing|length > 1 }} to fix
+    </button>
+    {% else %}
+    <span class="font-badge ok">All fonts matched</span>
+    {% endif %}
+    <a href="/" class="link-btn">Upload another</a>
+    <button class="download-btn" onclick="location.href='/download/{{ deck_id }}'">Download HTML</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div><p>Re-rendering slides...</p>
+</div>
+
+<!-- ---- Font panel ---- -->
+{% if font_report.missing %}
+<div class="font-overlay show" id="fontOverlay">
+  <div class="font-panel">
+    <div class="font-panel-header">
+      <div class="font-panel-title">Font Settings</div>
+      <button class="font-panel-close" onclick="toggleFontPanel()">&times;</button>
+    </div>
+    {% if font_report.found or font_report.installed %}
+    <div class="section-label">Installed</div>
+    <div class="font-list-ok">{{ (font_report.found + font_report.installed)|join(', ') }}</div>
+    {% endif %}
+    <div class="section-label">Needs replacement</div>
+    {% for font in font_report.missing %}
+    <div class="missing-row">
+      <div class="font-name">{{ font }}</div>
+      <div class="controls">
+        <select data-original="{{ font }}" class="glass-select font-replace">
+          <option value="">Select replacement...</option>
+          {% for sf in system_fonts %}<option value="{{ sf }}">{{ sf }}</option>{% endfor %}
+        </select>
+        <select data-original="{{ font }}" class="glass-select weight-select font-weight">
+          <option value="">Weight</option>
+          <option value="100">Thin</option><option value="200">ExtraLight</option>
+          <option value="300">Light</option><option value="400" selected>Regular</option>
+          <option value="500">Medium</option><option value="600">SemiBold</option>
+          <option value="700">Bold</option><option value="800">ExtraBold</option>
+          <option value="900">Black</option>
+        </select>
+      </div>
+    </div>
+    {% endfor %}
+    <button class="btn-apply" id="applyBtn" onclick="applyReplacements()">Apply & Re-render</button>
+  </div>
+</div>
+{% endif %}
+
+<!-- ---- Slides ---- -->
+<div id="slides"></div>
+
+<!-- ---- Subtitle area ---- -->
+<div class="subtitle-area" id="subtitleArea">
+  <div class="subtitle-user" id="subtitleUser"></div>
+  <div class="subtitle-bot" id="subtitleBot"></div>
+</div>
+
+<!-- ---- Bottom bar: nav + voice ---- -->
+<div class="bottom-bar">
+  <button class="bar-btn" onclick="go(-1)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  <div class="bar-counter" id="counter"></div>
+  <button class="bar-btn" onclick="go(1)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+  </button>
+
+  <div class="divider"></div>
+
+  <!-- Mic: 一个按钮搞定一切 -->
+  <button class="bar-btn" id="micBtn" onclick="toggleMic()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    <span id="micLabel">Hey 👋</span>
+  </button>
+
+
+</div>
+
+<script>
+/* ---- Slides ---- */
+const total = {{ total }};
+const deckId = "{{ deck_id }}";
+let current = 0;
+
+const container = document.getElementById('slides');
+for (let i = 1; i <= total; i++) {
+  const div = document.createElement('div');
+  div.className = 'slide' + (i === 1 ? ' active' : '');
+  div.innerHTML = `<img src="/slides/${deckId}/slide-${i}.png?t=${Date.now()}" alt="Slide ${i}">`;
+  container.appendChild(div);
+}
+
+function go(dir) {
+  const slides = document.querySelectorAll('.slide');
+  slides[current].classList.remove('active');
+  current = (current + dir + total) % total;
+  slides[current].classList.add('active');
+  document.getElementById('counter').textContent = `${current + 1} / ${total}`;
+}
+document.getElementById('counter').textContent = `1 / ${total}`;
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'ArrowRight' || e.key === ' ') go(1);
+  if (e.key === 'ArrowLeft') go(-1);
+});
+
+/* ---- Font panel ---- */
+function toggleFontPanel() {
+  const el = document.getElementById('fontOverlay');
+  if (el) el.classList.toggle('show');
+}
+function applyReplacements() {
+  const selects = document.querySelectorAll('.font-replace');
+  const weights = document.querySelectorAll('.font-weight');
+  const replacements = {}, weightMap = {};
+  selects.forEach(s => { if (s.value) replacements[s.dataset.original] = s.value; });
+  weights.forEach(s => { if (s.value && s.value !== '400') weightMap[s.dataset.original] = s.value; });
+  if (!Object.keys(replacements).length) { showToast('Select at least one replacement'); return; }
+  document.getElementById('loadingOverlay').classList.add('show');
+  document.getElementById('fontOverlay').classList.remove('show');
+  fetch(`/reconvert/${deckId}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ replacements, weights: weightMap }),
+  }).then(r => { if (r.ok) location.reload(); else showToast('Error'); })
+    .catch(() => showToast('Connection error'));
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+/* ============================================================
+   Voice Bot — 完整重写, 干净的状态机
+   状态: IDLE → GREETING → LISTENING → THINKING → SPEAKING → LISTENING
+   ============================================================ */
+const sessionId = Math.random().toString(36).slice(2);
+let conversationMode = false;
+let currentAudio = null;
+let recognition = null;
+let isBusy = false;
+let hasGreeted = false;
+
+/* ---- 状态常量 ---- */
+const STATE = { IDLE: 0, LISTENING: 1, THINKING: 2, SPEAKING: 3 };
+let voiceState = STATE.IDLE;
+
+/* ---- UI 元素 ---- */
+const subtitleArea = document.getElementById('subtitleArea');
+const subtitleUser = document.getElementById('subtitleUser');
+const subtitleBot  = document.getElementById('subtitleBot');
+const micBtn       = document.getElementById('micBtn');
+const micLabel     = document.getElementById('micLabel');
+
+/* ---- 字幕控制 ---- */
+function showUserText(t) { subtitleUser.textContent = t; subtitleUser.classList.add('show'); subtitleArea.classList.add('show'); }
+function showBotText(t)  { subtitleBot.textContent = t; subtitleBot.classList.add('show'); subtitleArea.classList.add('show'); }
+function hideSubtitle()  { subtitleArea.classList.remove('show'); subtitleUser.classList.remove('show'); subtitleBot.classList.remove('show'); }
+
+const thinkingLines = ['Brewing something good', 'One sec, brain loading', 'Consulting the slide gods', 'Almost there, hang tight', 'Crunching the slides', 'Let me cook'];
+function showThinking(isGreet) {
+  const msg = isGreet ? 'Waking up your guide' : thinkingLines[Math.floor(Math.random() * thinkingLines.length)];
+  subtitleBot.innerHTML = msg + '<span class="thinking-dots"></span>';
+  subtitleBot.classList.add('show');
+  subtitleArea.classList.add('show');
+}
+
+/* ---- 按钮状态同步 ---- */
+function updateButton() {
+  micBtn.classList.remove('active', 'recording', 'speaking');
+  if (!conversationMode) {
+    micLabel.textContent = 'Hey 👋';
+    return;
+  }
+  if (voiceState === STATE.LISTENING) {
+    micBtn.classList.add('recording');
+    micLabel.textContent = 'End Chat';
+  } else if (voiceState === STATE.SPEAKING) {
+    micBtn.classList.add('speaking');
+    micLabel.textContent = 'Shh!';
+  } else {
+    micBtn.classList.add('active');
+    micLabel.textContent = 'End Chat';
+  }
+}
+
+/* ---- 导航 ---- */
+function goToSlide(n) {
+  if (n < 1 || n > total) return;
+  const slides = document.querySelectorAll('.slide');
+  slides[current].classList.remove('active');
+  current = n - 1;
+  slides[current].classList.add('active');
+  document.getElementById('counter').textContent = `${current + 1} / ${total}`;
+}
+
+/* ---- idle 检测: 5分钟 ---- */
+let idleTimer = null;
+function resetIdleTimer() {
+  clearTimeout(idleTimer);
+  if (!conversationMode) return;
+  idleTimer = setTimeout(() => {
+    if (conversationMode && voiceState !== STATE.THINKING) {
+      talkToBot('[User has been silent for a while. Ask a brief, friendly check-in.]');
+    }
+  }, 300000);
+}
+
+/* ============================================================
+   核心: 按钮点击
+   ============================================================ */
+function toggleMic() {
+  if (!conversationMode) {
+    /* 开启对话 */
+    conversationMode = true;
+    updateButton();
+    if (!hasGreeted) {
+      hasGreeted = true;
+      talkToBot('[GREET]');
+    } else {
+      openMic();
+    }
+    return;
+  }
+
+  /* 已在对话中 */
+  if (voiceState === STATE.SPEAKING) {
+    /* 打断 bot → 开麦 */
+    killAudio();
+    openMic();
+    return;
+  }
+
+  /* 其他状态 → 关闭对话 */
+  conversationMode = false;
+  voiceState = STATE.IDLE;
+  killMic();
+  killAudio();
+  clearTimeout(idleTimer);
+  updateButton();
+  hideSubtitle();
+}
+
+/* ============================================================
+   麦克风: 干净的开/关, 不互相触发
+   ============================================================ */
+function openMic() {
+  if (!conversationMode) return;
+  killMic();  /* 确保没有残留 */
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+
+  voiceState = STATE.LISTENING;
+  updateButton();
+  resetIdleTimer();
+
+  const rec = new SR();
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.lang = 'en-US';
+
+  rec.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = 0; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    showUserText(final || interim);
+    if (final) {
+      killMic();
+      talkToBot(final);
+    }
+  };
+
+  rec.onend = () => {
+    /* 只有在 LISTENING 状态自然结束时才重开 (没听到话, 超时了) */
+    if (voiceState === STATE.LISTENING && conversationMode) {
+      setTimeout(openMic, 200);
+    }
+  };
+  rec.onerror = () => {
+    if (voiceState === STATE.LISTENING && conversationMode) {
+      setTimeout(openMic, 500);
+    }
+  };
+
+  rec.start();
+  recognition = rec;
+}
+
+function killMic() {
+  if (recognition) {
+    recognition.onend = null;
+    recognition.onerror = null;
+    recognition.onresult = null;
+    try { recognition.stop(); } catch(e) {}
+    recognition = null;
+  }
+}
+
+/* ============================================================
+   LLM 对话
+   ============================================================ */
+async function talkToBot(text) {
+  if (isBusy || !text) return;
+  isBusy = true;
+  voiceState = STATE.THINKING;
+  updateButton();
+
+  const isInternal = text.startsWith('[');
+  const isGreet = text === '[GREET]';
+  if (!isInternal) showUserText(text);
+  showThinking(isGreet);
+
+  try {
+    const resp = await fetch(`/api/talk/${deckId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, slide_index: current, voice: 'elevenlabs', session_id: sessionId }),
+    });
+    const data = await resp.json();
+
+    showBotText(data.text || '');
+
+    /* 执行导航 */
+    if (data.nav) {
+      if (data.nav === 'next') { if (current < total - 1) goToSlide(current + 2); }
+      else if (data.nav === 'prev') { if (current > 0) goToSlide(current); }
+      else { const n = parseInt(data.nav); if (n >= 1 && n <= total) goToSlide(n); }
+    }
+
+    isBusy = false;
+    if (data.text) {
+      speak(data.text);
+    } else {
+      /* 没有回复, 直接开麦 */
+      openMic();
+    }
+  } catch (e) {
+    showBotText('Connection error');
+    isBusy = false;
+    openMic();
+  }
+}
+
+/* ============================================================
+   ElevenLabs TTS
+   ============================================================ */
+function speak(text) {
+  killAudio();
+  voiceState = STATE.SPEAKING;
+  updateButton();
+
+  fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.audio || !conversationMode) { openMic(); return; }
+      const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
+      currentAudio = audio;
+      audio.onended = () => {
+        currentAudio = null;
+        if (conversationMode) openMic();
+      };
+      audio.play().catch(() => { openMic(); });
+    })
+    .catch(() => { openMic(); });
+}
+
+function killAudio() {
+  if (currentAudio) {
+    currentAudio.onended = null;
+    currentAudio.pause();
+    currentAudio = null;
+  }
+}
+</script>
+</body>
+</html>
