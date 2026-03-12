@@ -276,19 +276,13 @@ def stream_talk_response(deck_id, payload, output_folder):
     messages = ctx["messages"]
     history = ctx["history"]
 
-    if normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
-        raw_reply = "Hey! Ask me anything about this slide, or name a topic to jump to."
-        history.append({"role": "assistant", "content": raw_reply})
-        yield from stream_scripted_reply(raw_reply, None)
-        return
-
     if text != "[GREET]" and should_use_local_explainer(text):
         raw_reply = build_local_slide_reply(all_content, slide_idx, text)
         history.append({"role": "assistant", "content": raw_reply})
         yield from stream_scripted_reply(raw_reply, inferred_nav)
         return
 
-    # [GREET] 走 LLM 生成真正的 deck summary; 其他问题也走 LLM
+    # [GREET] 走 LLM 生成 deck summary; hi/hello/其他问题也走 LLM (有 history 不会重复 greet)
     if text == "[GREET]":
         system_prompt = build_greeting_prompt(all_content)
         fallback_fn = lambda: build_greeting(all_content)
@@ -345,10 +339,7 @@ def build_talk_response(deck_id, payload, output_folder):
     messages = ctx["messages"]
     system_prompt = build_system_prompt(all_content, slide_idx)
 
-    if normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
-        raw_reply = "Hey! Ask me anything about this slide, or name a topic to jump to."
-        print(f"[SMALLTALK LOCAL] {raw_reply}", flush=True)
-    elif text != "[GREET]" and should_use_local_explainer(text):
+    if text != "[GREET]" and should_use_local_explainer(text):
         raw_reply = build_local_slide_reply(all_content, slide_idx, text)
         print(f"[LOCAL FAST] {raw_reply[:120]}", flush=True)
     else:

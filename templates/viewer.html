@@ -694,6 +694,9 @@ function killAudio() {
     currentAudio.pause();
     currentAudio = null;
   }
+  if (preloadedAudio) {
+    preloadedAudio = null;
+  }
   clearTimeout(pendingSpeechTimer);
   pendingSpeechTimer = null;
   pendingSpeechText = '';
@@ -728,37 +731,45 @@ function maybeResumeMic() {
   }, 800);
 }
 
+let preloadedAudio = null;
+
+function preloadNextAudio() {
+  if (preloadedAudio) return;
+  if (!speechQueue.length) return;
+  const text = speechQueue.shift();
+  const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+  audio.preload = 'auto';
+  preloadedAudio = audio;
+}
+
 function playNextQueuedSentence() {
   if (!conversationMode) return;
   if (currentAudio) return;
-  if (!speechQueue.length) {
+
+  /* 优先用预加载好的 audio, 无缝衔接 */
+  let audio;
+  if (preloadedAudio) {
+    audio = preloadedAudio;
+    preloadedAudio = null;
+  } else if (speechQueue.length) {
+    const text = speechQueue.shift();
+    audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+  } else {
     maybeResumeMic();
     return;
   }
 
-  const text = speechQueue.shift();
-  const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
   currentAudio = audio;
-
-  const activateFish = () => {
-    voiceState = STATE.SPEAKING;
-    updateButton();
-  };
-
+  const activateFish = () => { voiceState = STATE.SPEAKING; updateButton(); };
   audio.oncanplay = activateFish;
-  audio.onplaying = activateFish;
-  audio.onended = () => {
-    currentAudio = null;
-    playNextQueuedSentence();
+  audio.onplaying = () => {
+    activateFish();
+    /* 当前段开始播了, 立刻预加载下一段 */
+    preloadNextAudio();
   };
-  audio.onerror = () => {
-    currentAudio = null;
-    playNextQueuedSentence();
-  };
-  audio.play().catch(() => {
-    currentAudio = null;
-    playNextQueuedSentence();
-  });
+  audio.onended = () => { currentAudio = null; playNextQueuedSentence(); };
+  audio.onerror = () => { currentAudio = null; playNextQueuedSentence(); };
+  audio.play().catch(() => { currentAudio = null; playNextQueuedSentence(); });
 }
 
 function flushPendingSpeech() {
@@ -779,8 +790,8 @@ function enqueueSentenceSpeech(text) {
   pendingSpeechText = pendingSpeechText ? `${pendingSpeechText} ${cleaned}` : cleaned;
   pendingSentenceCount++;
   clearTimeout(pendingSpeechTimer);
-  /* 攒 2+ 句 或 280+ 字符再发 TTS, 减少网络请求数, 消除句间空白 */
-  const shouldFlushNow = pendingSentenceCount >= 2 || pendingSpeechText.length >= 280;
+  /* 攒 3+ 句 或 400+ 字符再发 TTS, 减少请求次数 + 预加载消除间隔 */
+  const shouldFlushNow = pendingSentenceCount >= 3 || pendingSpeechText.length >= 400;
   if (shouldFlushNow) {
     flushPendingSpeech();
     return;
