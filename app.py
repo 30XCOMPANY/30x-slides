@@ -62,7 +62,7 @@ print(
 
 # ---- API Keys (运行时读取，兼容 Railway 注入) ----
 MINIMAX_API_URL = "https://api.minimax.io/v1/text/chatcompletion_v2"
-MINIMAX_MODEL = "MiniMax-M2.5"
+MINIMAX_MODEL = "MiniMax-M2.5-highspeed"
 REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "ELEVENLABS_API_KEY")
 
 
