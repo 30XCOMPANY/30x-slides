@@ -15,6 +15,7 @@ import uuid
 import base64
 import subprocess
 import urllib.request
+import urllib.error
 import threading
 import tempfile
 import time
@@ -60,7 +61,8 @@ print(
 
 
 # ---- API Keys (运行时读取，兼容 Railway 注入) ----
-MINIMAX_MODEL = "MiniMax-Text-01"
+MINIMAX_API_URL = "https://api.minimax.io/v1/text/chatcompletion_v2"
+MINIMAX_MODEL = "MiniMax-M2.5"
 REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "ELEVENLABS_API_KEY")
 
 
@@ -351,23 +353,26 @@ def apply_font_replacements(pptx_path, replacements, weight_map=None):
 # ============================================================
 def chat_with_llm(messages):
     """调用 MiniMax M2.5 highspeed，返回文本回复"""
-    import urllib.request
-    url = "https://api.minimax.chat/v1/text/chatcompletion_v2"
     payload = json.dumps({
         "model": MINIMAX_MODEL,
         "messages": messages,
         "max_tokens": 80,
     })
     req = urllib.request.Request(
-        url,
+        MINIMAX_API_URL,
         data=payload.encode("utf-8"),
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {get_minimax_key()}",
         },
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        raw = resp.read()
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8", errors="replace")
+        print(f"[LLM HTTP ERROR] status={e.code} body={error_body}", flush=True)
+        raise
     data = json.loads(raw)
     status = data.get("base_resp", {}).get("status_code")
     print(f"[LLM] status={status}, base_resp={data.get('base_resp')}", flush=True)
