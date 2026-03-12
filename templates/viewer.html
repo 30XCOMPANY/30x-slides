@@ -627,6 +627,8 @@ async function talkToBot(text) {
     activeTalkController = new AbortController();
     streamDone = false;
     speechQueue = [];
+    displayedBotText = '';
+    finalBotText = '';
 
     const resp = await fetch(`/api/talk/stream/${deckId}`, {
       method: 'POST',
@@ -656,7 +658,7 @@ async function talkToBot(text) {
         if (!line.trim()) continue;
         const event = JSON.parse(line);
         if (event.type === 'text') {
-          showBotText(event.text || '');
+          /* 不显示 — 字幕等 TTS 播放时同步出现 */
         } else if (event.type === 'sentence') {
           enqueueSentenceSpeech(event.text || '');
         } else if (event.type === 'done') {
@@ -664,9 +666,13 @@ async function talkToBot(text) {
           streamDone = true;
           isBusy = false;
           activeTalkController = null;
-          showBotText(event.text || '');
+          finalBotText = event.text || '';
           applyNav(event.nav);
-          maybeResumeMic();
+          /* 如果没有 TTS 在播, 直接显示最终文字并开 mic */
+          if (!currentAudio && !speechQueue.length) {
+            showBotText(finalBotText);
+            maybeResumeMic();
+          }
         }
       }
     }
@@ -674,7 +680,7 @@ async function talkToBot(text) {
     if (!streamDone) {
       isBusy = false;
       activeTalkController = null;
-      maybeResumeMic();
+      if (!currentAudio && !speechQueue.length) maybeResumeMic();
     }
   } catch (e) {
     if (e.name === 'AbortError') return;
@@ -694,14 +700,16 @@ function killAudio() {
     currentAudio.pause();
     currentAudio = null;
   }
-  if (preloadedAudio) {
-    preloadedAudio = null;
+  if (preloadedSegment) {
+    preloadedSegment = null;
   }
   clearTimeout(pendingSpeechTimer);
   pendingSpeechTimer = null;
   pendingSpeechText = '';
   pendingSentenceCount = 0;
   speechQueue = [];
+  displayedBotText = '';
+  finalBotText = '';
 }
 
 function applyNav(nav) {
@@ -731,30 +739,39 @@ function maybeResumeMic() {
   }, 800);
 }
 
-let preloadedAudio = null;
+let preloadedSegment = null; /* {audio, displayText} */
+let displayedBotText = '';   /* 已显示在字幕上的文字(随 TTS 播放累加) */
+let finalBotText = '';       /* done 事件的完整文字 */
+
+function makeAudioForText(text) {
+  return new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+}
 
 function preloadNextAudio() {
-  if (preloadedAudio) return;
+  if (preloadedSegment) return;
   if (!speechQueue.length) return;
-  const text = speechQueue.shift();
-  const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+  const seg = speechQueue.shift();
+  const audio = makeAudioForText(seg.ttsText);
   audio.preload = 'auto';
-  preloadedAudio = audio;
+  preloadedSegment = { audio, displayText: seg.displayText };
 }
 
 function playNextQueuedSentence() {
   if (!conversationMode) return;
   if (currentAudio) return;
 
-  /* 优先用预加载好的 audio, 无缝衔接 */
-  let audio;
-  if (preloadedAudio) {
-    audio = preloadedAudio;
-    preloadedAudio = null;
+  let audio, displayText;
+  if (preloadedSegment) {
+    audio = preloadedSegment.audio;
+    displayText = preloadedSegment.displayText;
+    preloadedSegment = null;
   } else if (speechQueue.length) {
-    const text = speechQueue.shift();
-    audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+    const seg = speechQueue.shift();
+    audio = makeAudioForText(seg.ttsText);
+    displayText = seg.displayText;
   } else {
+    /* 所有音频播完, 显示最终完整文字 */
+    if (finalBotText) showBotText(finalBotText);
     maybeResumeMic();
     return;
   }
@@ -764,7 +781,9 @@ function playNextQueuedSentence() {
   audio.oncanplay = activateFish;
   audio.onplaying = () => {
     activateFish();
-    /* 当前段开始播了, 立刻预加载下一段 */
+    /* 音频开始播 → 同步显示这段文字 */
+    displayedBotText = displayedBotText ? displayedBotText + ' ' + displayText : displayText;
+    showBotText(displayedBotText);
     preloadNextAudio();
   };
   audio.onended = () => { currentAudio = null; playNextQueuedSentence(); };
@@ -778,7 +797,7 @@ function flushPendingSpeech() {
   pendingSpeechTimer = null;
   pendingSentenceCount = 0;
   if (!cleaned) return;
-  speechQueue.push(cleaned);
+  speechQueue.push({ ttsText: cleaned, displayText: cleaned });
   playNextQueuedSentence();
 }
 
