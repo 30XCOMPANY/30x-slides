@@ -321,6 +321,50 @@ def best_section_phrase(section_slides):
     return phrase_scores[ranked[0]]["phrase"]
 
 
+def best_section_detail(section_slides, section_label):
+    detail_scores = {}
+    detail_order = []
+
+    for slide_content in section_slides:
+        summary = summarize_slide_core(slide_content)
+        for phrase in summary["concepts"] + summary["body_lines"][:3]:
+            normalized = phrase.lower()
+            if (
+                not normalized
+                or normalized == section_label.lower()
+                or is_weak_theme_phrase(phrase)
+                or is_abstract_positioning_phrase(phrase)
+            ):
+                continue
+
+            if normalized not in detail_scores:
+                detail_scores[normalized] = {"phrase": phrase, "score": 0}
+                detail_order.append(normalized)
+
+            score = 4 if phrase in summary["concepts"] else 2
+            if len(meaningful_tokens(phrase)) >= 3:
+                score += 1
+            detail_scores[normalized]["score"] += score
+
+    if not detail_scores:
+        return ""
+
+    ranked = sorted(
+        detail_order,
+        key=lambda key: (-detail_scores[key]["score"], detail_order.index(key))
+    )
+    return detail_scores[ranked[0]]["phrase"]
+
+
+def build_section_spoken_concept(section_label, section_detail):
+    label = normalize_spoken_text(section_label)
+    detail = normalize_spoken_text(section_detail)
+
+    if detail and detail.lower() != label.lower():
+        return f"{label}, especially {detail}"
+    return label
+
+
 def build_deck_synopsis(all_content):
     total_slides = len(all_content)
     if not total_slides:
@@ -332,8 +376,13 @@ def build_deck_synopsis(all_content):
         section_slides = all_content[start:end]
         if not section_slides:
             continue
+        label = best_section_phrase(section_slides)
         synopsis.append({
-            "label": best_section_phrase(section_slides),
+            "label": label,
+            "spoken_concept": build_section_spoken_concept(
+                label,
+                best_section_detail(section_slides, label),
+            ),
             "start_slide": section_slides[0]["slide"],
             "end_slide": section_slides[-1]["slide"],
         })
@@ -425,9 +474,10 @@ def build_greeting(all_content):
         )
 
     section_labels = [section["label"] for section in synopsis[:5]]
-    section_text = join_phrases(section_labels)
-    if len(section_labels) == 1:
-        summary = f"At a high level, the story is really about {section_labels[0]} and why it matters."
+    spoken_concepts = [section["spoken_concept"] for section in synopsis[:5]]
+    section_text = join_phrases(spoken_concepts)
+    if len(spoken_concepts) == 1:
+        summary = f"At a high level, the story is really about {spoken_concepts[0]} and why it matters."
     else:
         summary = (
             f"Here is the quick roadmap: it moves through {section_text}. "
@@ -435,7 +485,7 @@ def build_greeting(all_content):
         )
 
     return (
-        f"Hey, glad you're here. The big sections in this deck are {section_text}. "
+        f"Hey, glad you're here. The big sections in this deck are {join_phrases(section_labels)}. "
         f"{summary} What do you want to start with?"
     )
 
