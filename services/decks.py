@@ -122,18 +122,18 @@ def build_greeting(all_content):
         titles.append(title)
 
     if not titles:
-        return "Alright, I can give you the quick story here fast. Where do you wanna start?"
+        return "Alright, I can quickly summarize the whole thing and walk you through it step by step. How do you wanna learn this?"
 
     themes = titles[:4]
     if len(themes) == 1:
-        return f"Alright, this centers on {themes[0]}. I can walk you through the key point fast. Where do you wanna start?"
+        return f"Alright, this mainly covers {themes[0]}. I can summarize it first or go slide by slide. How do you wanna learn this?"
 
     if len(themes) == 2:
         theme_text = f"{themes[0]} and {themes[1]}"
     else:
         theme_text = ", ".join(themes[:-1]) + f", and {themes[-1]}"
 
-    return f"Alright, we can move through {theme_text}. I can take you straight to what matters most. Where do you wanna start?"
+    return f"Alright, this deck is basically about {theme_text}. I can give you the big-picture summary or teach it step by step. How do you wanna learn this?"
 
 
 def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
@@ -193,7 +193,7 @@ Spoken voice only. No markdown, no bullets, no lists.
 
 VIBE: Casual and sharp like "So basically..." or "Yeah, the idea here is...".
 
-[GREET]: Under 28 words. One sentence summary of the topic, mention 3-4 main themes, end with "Where do you wanna start?" Do NOT include [GO:N].
+[GREET]: Under 34 words. First summarize what this deck is about in plain language, mention 2-4 main themes, then ask "How do you wanna learn this?" Do NOT include [GO:N].
 
 REPLIES: MAX 18 WORDS. Prefer one sentence. Ask one short follow-up only when it helps. Never ramble.
 
