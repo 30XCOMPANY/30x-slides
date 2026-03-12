@@ -61,8 +61,13 @@ print(
 
 
 # ---- API Keys (运行时读取，兼容 Railway 注入) ----
-MINIMAX_API_URL = "https://api.minimax.io/v1/chat/completions"
 MINIMAX_MODEL = "MiniMax-M2.5-highspeed"
+MINIMAX_API_CANDIDATES = (
+    "https://api.minimax.io/v1/chat/completions",
+    "https://api.minimax.io/v1/text/chatcompletion_v2",
+    "https://api.minimaxi.com/v1/chat/completions",
+    "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+)
 REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "ELEVENLABS_API_KEY")
 
 
@@ -352,28 +357,44 @@ def apply_font_replacements(pptx_path, replacements, weight_map=None):
 # LLM — MiniMax (OpenAI 兼容)
 # ============================================================
 def chat_with_llm(messages):
-    """Call MiniMax via the OpenAI-compatible chat completions API."""
+    """Call MiniMax with ordered endpoint fallback across compatible domains."""
     payload = json.dumps({
         "model": MINIMAX_MODEL,
         "messages": messages,
         "max_tokens": 80,
         "reasoning_split": True,
     })
-    req = urllib.request.Request(
-        MINIMAX_API_URL,
-        data=payload.encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {get_minimax_key()}",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            raw = resp.read()
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8", errors="replace")
-        print(f"[LLM HTTP ERROR] status={e.code} body={error_body}", flush=True)
-        raise
+    last_error = None
+    raw = None
+
+    for api_url in MINIMAX_API_CANDIDATES:
+        req = urllib.request.Request(
+            api_url,
+            data=payload.encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {get_minimax_key()}",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read()
+            print(f"[LLM] endpoint_ok={api_url}", flush=True)
+            break
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode("utf-8", errors="replace")
+            print(
+                f"[LLM HTTP ERROR] endpoint={api_url} status={e.code} body={error_body}",
+                flush=True,
+            )
+            last_error = e
+        except Exception as e:
+            print(f"[LLM REQUEST ERROR] endpoint={api_url} error={e}", flush=True)
+            last_error = e
+
+    if raw is None:
+        raise last_error or RuntimeError("MiniMax request failed with no response")
+
     data = json.loads(raw)
 
     if data.get("error"):
