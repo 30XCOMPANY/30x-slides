@@ -68,7 +68,7 @@ print(
 
 
 # ---- API Keys (运行时读取，兼容 Railway 注入) ----
-ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
+ANTHROPIC_MODEL = "claude-haiku-4-5"
 REQUIRED_ENV_VARS = ("ANTHROPIC_API_KEY", "FISH_AUDIO_API_KEY")
 
 
