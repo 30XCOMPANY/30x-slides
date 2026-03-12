@@ -90,7 +90,7 @@ def chat_with_llm(system_prompt, messages):
     payload = {
         "model": LLM_MODEL,
         "messages": build_openrouter_messages(system_prompt, messages),
-        "max_tokens": 200,
+        "max_tokens": 512,
         "temperature": 0.6,
     }
     url = f"{get_openrouter_base_url()}/chat/completions"
@@ -111,7 +111,7 @@ def stream_chat_with_llm(system_prompt, messages):
     payload = {
         "model": LLM_MODEL,
         "messages": build_openrouter_messages(system_prompt, messages),
-        "max_tokens": 200,
+        "max_tokens": 512,
         "temperature": 0.6,
         "stream": True,
     }
@@ -160,27 +160,14 @@ def ensure_interactive_ending(reply):
     return reply
 
 
-def trim_spoken_reply(reply, max_chars=480, max_words=80):
+def trim_spoken_reply(reply):
+    """只做空白清理, 不截断内容 — 让 LLM 把问题回答完整"""
     reply = re.sub(r"\s+", " ", (reply or "")).strip()
     if not reply:
         return ""
-
-    sentences = re.split(r"(?<=[.!?])\s+", reply)
-    first_five = " ".join(sentences[:5]).strip()
-    if first_five and len(first_five) <= max_chars:
-        return ensure_interactive_ending(first_five)
-
-    words = reply.split()
-    if len(words) > max_words:
-        clipped = " ".join(words[:max_words]).strip(" ,;:-")
-        if clipped and clipped[-1] not in ".!?":
-            clipped += "."
-        return ensure_interactive_ending(clipped)
-
-    clipped = reply[:max_chars].rsplit(" ", 1)[0].strip(" ,;:-")
-    if clipped and clipped[-1] not in ".!?":
-        clipped += "."
-    return ensure_interactive_ending(clipped or reply[:max_chars])
+    # 去掉 [GO:...] 残留
+    reply = re.sub(r"\s*\[GO:\w+\]\s*", " ", reply).strip()
+    return reply
 
 
 def parse_nav_command(reply):
@@ -341,8 +328,7 @@ def stream_talk_response(deck_id, payload, output_folder):
                 cleaned = strip_nav_tag(sentence)
                 if cleaned:
                     completed_sentences.append(cleaned)
-                    if len(completed_sentences) <= 6:
-                        yield emit_event("sentence", text=cleaned)
+                    yield emit_event("sentence", text=cleaned)
     except Exception as exc:
         print(f"[LLM STREAM ERROR] {exc}", flush=True)
         fallback_reply = fallback_fn()
@@ -356,8 +342,7 @@ def stream_talk_response(deck_id, payload, output_folder):
         cleaned = strip_nav_tag(sentence_buffer.strip())
         if cleaned:
             completed_sentences.append(cleaned)
-            if len(completed_sentences) <= 6:
-                yield emit_event("sentence", text=cleaned)
+            yield emit_event("sentence", text=cleaned)
 
     raw_reply = " ".join(completed_sentences).strip()
     raw_reply = trim_spoken_reply(raw_reply)

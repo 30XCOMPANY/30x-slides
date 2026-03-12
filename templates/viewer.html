@@ -641,6 +641,7 @@ async function talkToBot(text) {
     speechQueue = [];
     displayedBotText = '';
     finalBotText = '';
+    totalFlushedBatches = 0;
 
     const resp = await fetch(`/api/talk/stream/${deckId}`, {
       method: 'POST',
@@ -722,6 +723,7 @@ function killAudio() {
   speechQueue = [];
   displayedBotText = '';
   finalBotText = '';
+  totalFlushedBatches = 0;
 }
 
 function applyNav(nav) {
@@ -809,6 +811,7 @@ function flushPendingSpeech() {
   pendingSpeechTimer = null;
   pendingSentenceCount = 0;
   if (!cleaned) return;
+  totalFlushedBatches++;
   speechQueue.push({ ttsText: cleaned, displayText: cleaned });
   /* 如果当前有音频在播但还没预加载下一段, 立刻预加载 */
   if (currentAudio && !preloadedSegment) {
@@ -819,6 +822,7 @@ function flushPendingSpeech() {
 }
 
 let pendingSentenceCount = 0;
+let totalFlushedBatches = 0;
 
 function enqueueSentenceSpeech(text) {
   const cleaned = (text || '').trim();
@@ -826,8 +830,9 @@ function enqueueSentenceSpeech(text) {
   pendingSpeechText = pendingSpeechText ? `${pendingSpeechText} ${cleaned}` : cleaned;
   pendingSentenceCount++;
   clearTimeout(pendingSpeechTimer);
-  /* 2 句一批 + 预加载 = 流畅衔接; 批太大反而延迟首音 */
-  const shouldFlushNow = pendingSentenceCount >= 2 || pendingSpeechText.length >= 300;
+  /* 第一批: 1 句就发 (用户最快听到声音); 后续: 攒 2 句再发 (流畅衔接) */
+  const isFirstBatch = totalFlushedBatches === 0 && !currentAudio;
+  const shouldFlushNow = isFirstBatch || pendingSentenceCount >= 2 || pendingSpeechText.length >= 300;
   if (shouldFlushNow) {
     flushPendingSpeech();
     return;
