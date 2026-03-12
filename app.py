@@ -551,13 +551,18 @@ def api_talk(deck_id):
         history.append({"role": "user", "content": text})
 
     messages = [{"role": "system", "content": system_prompt}] + history
-    if is_internal and text != "[GREET]":
+    if is_internal:
         messages.append({"role": "user", "content": text})
 
     # ---- LLM ----
     if text == "[GREET]":
-        reply = build_greeting(all_content)
-        print(f"[GREET] {reply}", flush=True)
+        try:
+            reply = chat_with_llm(messages)
+            print(f"[GREET LLM] {reply[:120]}", flush=True)
+        except Exception as e:
+            print(f"[GREET FALLBACK] {e}", flush=True)
+            reply = build_greeting(all_content)
+            print(f"[GREET LOCAL] {reply}", flush=True)
     else:
         try:
             reply = chat_with_llm(messages)
