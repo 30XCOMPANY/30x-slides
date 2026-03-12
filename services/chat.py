@@ -124,7 +124,11 @@ def ensure_interactive_ending(reply):
     if not reply:
         return interactive_follow_up("empty", 0)
 
-    interactive_markers = ("do you want", "want the", "should i", "which part", "where do you want", "how do you want")
+    interactive_markers = (
+        "do you want", "want the", "should i", "which part", "where do you want",
+        "how do you want", "want me to", "what do you want", "what would you like",
+        "which section", "what do you want to start", "what do you want to dig into",
+    )
     if any(marker in reply.lower() for marker in interactive_markers):
         return reply
 

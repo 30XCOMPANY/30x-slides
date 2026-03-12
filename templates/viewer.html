@@ -1,5 +1,5 @@
 <!--
-[INPUT]: 依赖 Flask 注入的 deck_id、total、slide_content、font_report、system_fonts
+[INPUT]: 依赖 Flask 注入的 deck_id、total、slide_content、greeting_text、font_report、system_fonts
 [OUTPUT]: 对外提供 slide viewer、voice bot、font replacement 交互
 [POS]: templates 的核心阅读页，被 /view/<deck_id> 路由渲染
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
@@ -377,6 +377,7 @@
 const total = {{ total }};
 const deckId = "{{ deck_id }}";
 const slideContent = {{ slide_content|tojson }};
+const greetingText = {{ greeting_text|tojson }};
 let current = 0;
 
 const container = document.getElementById('slides');
@@ -441,6 +442,8 @@ let hasGreeted = false;
 let activeTalkController = null;
 let speechQueue = [];
 let streamDone = false;
+let pendingSpeechText = '';
+let pendingSpeechTimer = null;
 
 /* ---- 状态常量 ---- */
 const STATE = { IDLE: 0, LISTENING: 1, THINKING: 2, SPEAKING: 3 };
@@ -458,58 +461,12 @@ function showUserText(t) { subtitleUser.textContent = t; subtitleUser.classList.
 function showBotText(t)  { subtitleBot.textContent = t; subtitleBot.classList.add('show'); subtitleArea.classList.add('show'); }
 function hideSubtitle()  { subtitleArea.classList.remove('show'); subtitleUser.classList.remove('show'); subtitleBot.classList.remove('show'); }
 
-function meaningfulGreetingText(text) {
-  const cleaned = String(text || '').replace(/[|/]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!cleaned) return null;
-  const lowered = cleaned.toLowerCase();
-  if (['problem', 'solution', 'roi', 'overview', 'summary', 'agenda', 'introduction', 'intro', 'results', 'next steps'].includes(lowered)) {
-    return null;
-  }
-  if (/\b20\d{2}\b/.test(lowered) && cleaned.split(' ').length <= 3) {
-    return null;
-  }
-  return cleaned;
-}
-
-function buildLocalGreeting() {
-  const sections = [];
-  for (const slide of (slideContent || [])) {
-    const lines = Array.isArray(slide.text) ? slide.text : [];
-    for (const line of lines.slice(0, 3)) {
-      const phrase = meaningfulGreetingText(line);
-      if (!phrase) continue;
-      if (!sections.some(existing => existing.toLowerCase() === phrase.toLowerCase())) {
-        sections.push(phrase);
-      }
-      if (sections.length >= 3) break;
-    }
-    if (sections.length >= 3) break;
-  }
-
-  if (!sections.length) {
-    return 'Hey, good to have you here. I can walk you through the main sections, give you the high-level summary, and then go deeper wherever you want. Which part do you want to start with?';
-  }
-
-  const sectionList = sections.length === 1
-    ? sections[0]
-    : sections.length === 2
-      ? `${sections[0]} and ${sections[1]}`
-      : `${sections[0]}, ${sections[1]}, and ${sections[2]}`;
-
-  const summary = sections.length === 1
-    ? `At a high level, it is building one clear story around ${sections[0]}.`
-    : `At a high level, it connects these sections into one bigger story, instead of treating them like separate bullets.`;
-
-  return `Hey, good to have you here. The main sections here are ${sectionList}. ${summary} Which section do you want to start with?`;
-}
-
 function startGreeting() {
-  const greeting = buildLocalGreeting();
+  const greeting = greetingText || 'Hey, good to have you here. I can walk you through the main sections, give you the big-picture summary, and then go deeper wherever you want. What do you want to dig into first?';
   isBusy = false;
   streamDone = true;
   showBotText(greeting);
-  const sentences = greeting.match(/[^.!?]+[.!?]/g) || [greeting];
-  for (const sentence of sentences) enqueueSentenceSpeech(sentence.trim());
+  enqueueSentenceSpeech(greeting);
 }
 
 const thinkingLines = ['Brewing something good', 'One sec, brain loading', 'Consulting the slide gods', 'Almost there, hang tight', 'Crunching the slides', 'Let me cook'];
@@ -706,6 +663,7 @@ async function talkToBot(text) {
         } else if (event.type === 'sentence') {
           enqueueSentenceSpeech(event.text || '');
         } else if (event.type === 'done') {
+          flushPendingSpeech();
           streamDone = true;
           isBusy = false;
           activeTalkController = null;
@@ -739,6 +697,9 @@ function killAudio() {
     currentAudio.pause();
     currentAudio = null;
   }
+  clearTimeout(pendingSpeechTimer);
+  pendingSpeechTimer = null;
+  pendingSpeechText = '';
   speechQueue = [];
 }
 
@@ -760,6 +721,7 @@ function maybeResumeMic() {
   if (!conversationMode) return;
   if (isBusy) return;
   if (currentAudio) return;
+  if (pendingSpeechText.trim()) return;
   if (speechQueue.length) return;
   openMic();
 }
@@ -797,11 +759,26 @@ function playNextQueuedSentence() {
   });
 }
 
-function enqueueSentenceSpeech(text) {
-  const cleaned = (text || '').trim();
+function flushPendingSpeech() {
+  const cleaned = pendingSpeechText.trim();
+  pendingSpeechText = '';
+  pendingSpeechTimer = null;
   if (!cleaned) return;
   speechQueue.push(cleaned);
   playNextQueuedSentence();
+}
+
+function enqueueSentenceSpeech(text) {
+  const cleaned = (text || '').trim();
+  if (!cleaned) return;
+  pendingSpeechText = pendingSpeechText ? `${pendingSpeechText} ${cleaned}` : cleaned;
+  clearTimeout(pendingSpeechTimer);
+  const shouldFlushNow = /[.!?]["']?$/.test(cleaned) || pendingSpeechText.length >= 220;
+  if (shouldFlushNow) {
+    flushPendingSpeech();
+    return;
+  }
+  pendingSpeechTimer = setTimeout(flushPendingSpeech, 180);
 }
 </script>
 </body>

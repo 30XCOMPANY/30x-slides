@@ -31,7 +31,7 @@ from flask_socketio import SocketIO
 import fitz  # pymupdf
 from services.chat import build_talk_response, stream_talk_response
 from services.config import log_boot_env, validate_required_env
-from services.decks import extract_slide_content, load_deck_content, save_deck_content
+from services.decks import build_greeting, extract_slide_content, load_deck_content, save_deck_content
 from services.tts import stream_fish_audio, synthesize_fish_audio
 
 app = Flask(__name__)
@@ -437,6 +437,7 @@ def viewer(deck_id):
         font_report=font_report,
         system_fonts=system_fonts,
         slide_content=content,
+        greeting_text=build_greeting(content),
     )
 
 

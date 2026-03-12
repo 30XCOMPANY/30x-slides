@@ -21,6 +21,10 @@ STOPWORDS = {
     "slide", "deck", "overview", "summary", "introduction", "intro", "section",
     "part", "more", "than", "into", "onto", "over", "under", "main", "topic",
 }
+NAV_INTENT_PATTERNS = (
+    "go to", "jump to", "take me to", "show me", "move to", "switch to",
+    "next slide", "previous slide", "go back", "next one", "slide ",
+)
 INTERACTIVE_FOLLOW_UPS = (
     "Do you want the short version, the deeper takeaway, or the next slide?",
     "Do you want me to unpack the main point, compare it with the last slide, or move forward?",
@@ -272,6 +276,10 @@ def infer_navigation_target(user_text, all_content, current_slide_idx):
     if requested_number:
         return requested_number.group(1)
 
+    has_nav_intent = any(pattern in normalized for pattern in NAV_INTENT_PATTERNS)
+    if not has_nav_intent:
+        return None
+
     nav_index = build_navigation_index(all_content)
     query_tokens = meaningful_tokens(normalized)
     if not query_tokens:
@@ -310,17 +318,21 @@ def infer_navigation_target(user_text, all_content, current_slide_idx):
 def build_greeting(all_content):
     themes = extract_theme_phrases(all_content)
     if not themes:
-        return "Hey, good to have you here. I can walk you through the main sections, give you the high-level summary, and then go deeper wherever you want. Which section do you want to start with?"
+        return (
+            "Hey, good to have you here. I can walk you through the main sections in this deck, "
+            "give you the big-picture summary, and then slow down anywhere you want. "
+            "What do you want to dig into first?"
+        )
     section_text = join_phrases(themes[:3])
     summary = (
-        f"At a high level, it is building one clear story around {themes[0]}."
+        f"At a high level, the story is really about {themes[0]} and why it matters."
         if len(themes) == 1
-        else "At a high level, it connects these sections into one bigger story instead of treating them like isolated bullets."
+        else "At a high level, it connects those sections into one clear story instead of leaving them as separate bullets."
     )
 
     return (
         f"Hey, good to have you here. The main sections here are {section_text}. "
-        f"{summary} Which section do you want to start with?"
+        f"{summary} What do you want to start with?"
     )
 
 
@@ -345,15 +357,15 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
 
     if not body_lines:
         return (
-            f"This part is about {title}. "
-            "It is setting up the main idea more than listing detailed evidence. "
-            "So the useful read here is the direction it is pointing you toward. "
+            f"This slide is setting up {title}. "
+            "It is more about framing the main idea than dumping detail all at once. "
+            "So the useful read here is the direction it wants you to notice. "
             f"{interactive_follow_up(user_text or title, slide_content['slide'])}"
         )
 
     concept_text = join_phrases(concepts[:3])
     first = body_lines[0]
-    sentences = [f"This part is really about {title}."]
+    sentences = [f"This slide is really about {title}."]
     if concept_text:
         sentences.append(f"The core idea is how {concept_text} connect in one story.")
     else:
