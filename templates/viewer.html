@@ -571,14 +571,26 @@ function openMic() {
 
   rec.onresult = (e) => {
     let interim = '', final = '';
+    let confidence = 0;
     for (let i = 0; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        final += e.results[i][0].transcript;
+        confidence = Math.max(confidence, e.results[i][0].confidence || 0);
+      } else {
+        interim += e.results[i][0].transcript;
+      }
     }
     showUserText(final || interim);
     if (final) {
+      const trimmed = final.trim();
+      const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
+      /* 过滤垃圾: 少于 3 个词 或 置信度太低 → 扔掉, 重开 mic */
+      if (wordCount < 3 || confidence < 0.4) {
+        console.log(`[MIC] dropped: "${trimmed}" words=${wordCount} conf=${confidence.toFixed(2)}`);
+        return;
+      }
       killMic();
-      talkToBot(final);
+      talkToBot(trimmed);
     }
   };
 
@@ -732,11 +744,11 @@ function maybeResumeMic() {
   if (currentAudio) return;
   if (pendingSpeechText.trim()) return;
   if (speechQueue.length) return;
-  /* 延迟 800ms 再开 mic, 避免捡到 TTS 回声 → 重复 greeting */
+  /* 延迟 1.5s 再开 mic, 等 TTS 回声完全消散 */
   setTimeout(() => {
     if (!conversationMode || isBusy || currentAudio || speechQueue.length) return;
     openMic();
-  }, 800);
+  }, 1500);
 }
 
 let preloadedSegment = null; /* {audio, displayText} */
