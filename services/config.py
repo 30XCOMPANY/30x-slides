@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 LLM_MODEL = "MiniMax-M2.5-highspeed"
+LLM_FALLBACK_MODEL = "MiniMax-M2.5"
 MINIMAX_BASE_URL = "https://api.minimax.io/anthropic"
 REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "FISH_AUDIO_API_KEY")
 

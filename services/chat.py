@@ -10,7 +10,7 @@ import re
 
 from anthropic import Anthropic
 
-from services.config import LLM_MODEL, get_minimax_base_url, get_minimax_key
+from services.config import LLM_FALLBACK_MODEL, LLM_MODEL, get_minimax_base_url, get_minimax_key
 from services.decks import (
     build_greeting,
     interactive_follow_up,
@@ -44,42 +44,68 @@ def build_llm_client(timeout):
     )
 
 
+def iter_models():
+    models = [LLM_MODEL]
+    if LLM_FALLBACK_MODEL and LLM_FALLBACK_MODEL != LLM_MODEL:
+        models.append(LLM_FALLBACK_MODEL)
+    return models
+
+
 def chat_with_llm(system_prompt, messages):
     client = build_llm_client(timeout=6.0)
-    response = client.messages.create(
-        model=LLM_MODEL,
-        max_tokens=48,
-        system=system_prompt,
-        messages=messages,
-    )
+    last_error = None
 
-    text_blocks = [
-        block.text
-        for block in response.content
-        if getattr(block, "type", "") == "text" and getattr(block, "text", "")
-    ]
-    content = "".join(text_blocks).strip()
-    if not content:
-        content = "I'm not sure how to respond to that."
+    for model in iter_models():
+        try:
+            response = client.messages.create(
+                model=model,
+                max_tokens=48,
+                system=system_prompt,
+                messages=messages,
+            )
+            text_blocks = [
+                block.text
+                for block in response.content
+                if getattr(block, "type", "") == "text" and getattr(block, "text", "")
+            ]
+            content = "".join(text_blocks).strip()
+            if not content:
+                content = "I'm not sure how to respond to that."
 
-    print(
-        f"[LLM] model={LLM_MODEL} content_present={bool(content)} len={len(content)}",
-        flush=True,
-    )
-    return content
+            print(
+                f"[LLM] model={model} content_present={bool(content)} len={len(content)}",
+                flush=True,
+            )
+            return content
+        except Exception as exc:
+            last_error = exc
+            print(f"[LLM RETRY] model={model} error={exc}", flush=True)
+
+    raise last_error
 
 
 def stream_chat_with_llm(system_prompt, messages):
     client = build_llm_client(timeout=20.0)
-    with client.messages.stream(
-        model=LLM_MODEL,
-        max_tokens=96,
-        system=system_prompt,
-        messages=messages,
-    ) as stream:
-        for text in stream.text_stream:
-            if text:
-                yield text
+    last_error = None
+
+    for model in iter_models():
+        try:
+            with client.messages.stream(
+                model=model,
+                max_tokens=96,
+                system=system_prompt,
+                messages=messages,
+            ) as stream:
+                for text in stream.text_stream:
+                    if text:
+                        yield text
+            print(f"[LLM STREAM] model={model} completed", flush=True)
+            return
+        except Exception as exc:
+            last_error = exc
+            print(f"[LLM STREAM RETRY] model={model} error={exc}", flush=True)
+
+    raise last_error
 
 
 def ensure_interactive_ending(reply):
