@@ -47,20 +47,26 @@ def chat_with_llm(system_prompt, messages):
     return content
 
 
-def trim_spoken_reply(reply, max_chars=170):
+def trim_spoken_reply(reply, max_chars=110, max_words=16):
     reply = re.sub(r"\s+", " ", (reply or "")).strip()
     if not reply:
         return ""
 
-    sentences = re.split(r"(?<=[.!?])\s+", reply)
-    trimmed = " ".join(sentences[:2]).strip()
-    if len(trimmed) <= max_chars:
-        return trimmed
+    first_sentence = re.split(r"(?<=[.!?])\s+", reply, maxsplit=1)[0].strip()
+    if first_sentence and len(first_sentence) <= max_chars:
+        return first_sentence
 
-    clipped = trimmed[:max_chars].rsplit(" ", 1)[0].strip(" ,;:-")
+    words = reply.split()
+    if len(words) > max_words:
+        clipped = " ".join(words[:max_words]).strip(" ,;:-")
+        if clipped and clipped[-1] not in ".!?":
+            clipped += "."
+        return clipped
+
+    clipped = reply[:max_chars].rsplit(" ", 1)[0].strip(" ,;:-")
     if clipped and clipped[-1] not in ".!?":
         clipped += "."
-    return clipped or trimmed[:max_chars]
+    return clipped or reply[:max_chars]
 
 
 def parse_nav_command(reply):
@@ -139,6 +145,7 @@ def build_talk_response(deck_id, payload, output_folder):
 
     spoken_reply, nav_command = parse_nav_command(raw_reply)
     spoken_reply = trim_spoken_reply(spoken_reply)
+    print(f"[LLM TRIMMED] len={len(spoken_reply)} text={spoken_reply[:120]}", flush=True)
 
     history.append({"role": "assistant", "content": raw_reply})
     return {"text": spoken_reply, "nav": nav_command}
