@@ -49,7 +49,7 @@ FONT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---- 环境变量启动诊断 ----
 def _env_flag(name):
-    value = os.environ.get(name, "")
+    value = _clean_env_value(os.environ.get(name, ""))
     return "SET" if value.strip() else "MISSING"
 
 print(
@@ -72,8 +72,12 @@ MINIMAX_API_CANDIDATES = (
 REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "ELEVENLABS_API_KEY")
 
 
+def _clean_env_value(value):
+    return re.sub(r"\s+", "", value or "")
+
+
 def _validate_required_env():
-    missing = [name for name in REQUIRED_ENV_VARS if not os.environ.get(name, "").strip()]
+    missing = [name for name in REQUIRED_ENV_VARS if not _clean_env_value(os.environ.get(name, ""))]
     if missing:
         raise RuntimeError(
             "Missing required environment variables: "
@@ -85,13 +89,13 @@ def _validate_required_env():
 _validate_required_env()
 
 def get_minimax_key():
-    return os.environ.get("MINIMAX_API_KEY", "").strip()
+    return _clean_env_value(os.environ.get("MINIMAX_API_KEY", ""))
 
 def get_elevenlabs_key():
-    return os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    return _clean_env_value(os.environ.get("ELEVENLABS_API_KEY", ""))
 
 def get_elevenlabs_voice():
-    return os.environ.get("ELEVENLABS_VOICE_ID", "HY09gbZLEpQrUZjrJgJv").strip()
+    return _clean_env_value(os.environ.get("ELEVENLABS_VOICE_ID", "HY09gbZLEpQrUZjrJgJv"))
 
 
 
