@@ -10,7 +10,12 @@ import re
 
 from anthropic import Anthropic
 
-from services.config import LLM_FALLBACK_MODEL, LLM_MODEL, get_minimax_base_url, get_minimax_key
+from services.config import (
+    LLM_FALLBACK_MODEL,
+    LLM_MODEL,
+    get_minimax_base_url_candidates,
+    get_minimax_key,
+)
 from services.decks import (
     build_greeting,
     interactive_follow_up,
@@ -36,10 +41,10 @@ LOCAL_FAST_PATTERNS = (
 )
 
 
-def build_llm_client(timeout):
+def build_llm_client(timeout, base_url):
     return Anthropic(
         api_key=get_minimax_key(),
-        base_url=get_minimax_base_url(),
+        base_url=base_url,
         timeout=timeout,
     )
 
@@ -52,58 +57,60 @@ def iter_models():
 
 
 def chat_with_llm(system_prompt, messages):
-    client = build_llm_client(timeout=6.0)
     last_error = None
 
-    for model in iter_models():
-        try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=48,
-                system=system_prompt,
-                messages=messages,
-            )
-            text_blocks = [
-                block.text
-                for block in response.content
-                if getattr(block, "type", "") == "text" and getattr(block, "text", "")
-            ]
-            content = "".join(text_blocks).strip()
-            if not content:
-                content = "I'm not sure how to respond to that."
+    for base_url in get_minimax_base_url_candidates():
+        client = build_llm_client(timeout=6.0, base_url=base_url)
+        for model in iter_models():
+            try:
+                response = client.messages.create(
+                    model=model,
+                    max_tokens=48,
+                    system=system_prompt,
+                    messages=messages,
+                )
+                text_blocks = [
+                    block.text
+                    for block in response.content
+                    if getattr(block, "type", "") == "text" and getattr(block, "text", "")
+                ]
+                content = "".join(text_blocks).strip()
+                if not content:
+                    content = "I'm not sure how to respond to that."
 
-            print(
-                f"[LLM] model={model} content_present={bool(content)} len={len(content)}",
-                flush=True,
-            )
-            return content
-        except Exception as exc:
-            last_error = exc
-            print(f"[LLM RETRY] model={model} error={exc}", flush=True)
+                print(
+                    f"[LLM] base_url={base_url} model={model} content_present={bool(content)} len={len(content)}",
+                    flush=True,
+                )
+                return content
+            except Exception as exc:
+                last_error = exc
+                print(f"[LLM RETRY] base_url={base_url} model={model} error={exc}", flush=True)
 
     raise last_error
 
 
 def stream_chat_with_llm(system_prompt, messages):
-    client = build_llm_client(timeout=20.0)
     last_error = None
 
-    for model in iter_models():
-        try:
-            with client.messages.stream(
-                model=model,
-                max_tokens=96,
-                system=system_prompt,
-                messages=messages,
-            ) as stream:
-                for text in stream.text_stream:
-                    if text:
-                        yield text
-            print(f"[LLM STREAM] model={model} completed", flush=True)
-            return
-        except Exception as exc:
-            last_error = exc
-            print(f"[LLM STREAM RETRY] model={model} error={exc}", flush=True)
+    for base_url in get_minimax_base_url_candidates():
+        client = build_llm_client(timeout=20.0, base_url=base_url)
+        for model in iter_models():
+            try:
+                with client.messages.stream(
+                    model=model,
+                    max_tokens=96,
+                    system=system_prompt,
+                    messages=messages,
+                ) as stream:
+                    for text in stream.text_stream:
+                        if text:
+                            yield text
+                print(f"[LLM STREAM] base_url={base_url} model={model} completed", flush=True)
+                return
+            except Exception as exc:
+                last_error = exc
+                print(f"[LLM STREAM RETRY] base_url={base_url} model={model} error={exc}", flush=True)
 
     raise last_error
 

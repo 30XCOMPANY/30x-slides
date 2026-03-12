@@ -51,6 +51,16 @@ def get_minimax_base_url():
     return (os.environ.get("MINIMAX_BASE_URL", MINIMAX_BASE_URL) or MINIMAX_BASE_URL).strip()
 
 
+def get_minimax_base_url_candidates():
+    primary = get_minimax_base_url()
+    candidates = [primary]
+    if ".io/" in primary:
+        candidates.append(primary.replace(".io/", ".com/"))
+    elif ".com/" in primary:
+        candidates.append(primary.replace(".com/", ".io/"))
+    return candidates
+
+
 def get_fish_audio_key():
     return clean_env_value(os.environ.get("FISH_AUDIO_API_KEY", ""))
 
