@@ -1,10 +1,13 @@
 FROM python:3.11-slim
 
-# ---- LibreOffice + 中文字体 ----
+# ---- LibreOffice + 常用字体 ----
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-core libreoffice-impress libreoffice-writer \
-    fonts-noto-cjk fonts-liberation \
-    && rm -rf /var/lib/apt/lists/*
+    fonts-noto-cjk fonts-liberation fonts-dejavu \
+    fonts-roboto fonts-open-sans fonts-lato \
+    fontconfig \
+    && rm -rf /var/lib/apt/lists/* \
+    && fc-cache -f
 
 WORKDIR /app
 COPY requirements.txt .

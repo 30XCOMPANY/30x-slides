@@ -125,18 +125,9 @@ def is_font_installed(font_name):
 
 
 def try_install_font(font_name):
+    """只装 400 + 700 两个权重，够用且快"""
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", font_name).strip("-").lower()
-    weights = {
-        "100": "latin-100-normal", "100i": "latin-100-italic",
-        "200": "latin-200-normal", "200i": "latin-200-italic",
-        "300": "latin-300-normal", "300i": "latin-300-italic",
-        "400": "latin-400-normal", "400i": "latin-400-italic",
-        "500": "latin-500-normal", "500i": "latin-500-italic",
-        "600": "latin-600-normal", "600i": "latin-600-italic",
-        "700": "latin-700-normal", "700i": "latin-700-italic",
-        "800": "latin-800-normal", "800i": "latin-800-italic",
-        "900": "latin-900-normal", "900i": "latin-900-italic",
-    }
+    weights = {"400": "latin-400-normal", "700": "latin-700-normal"}
     installed = False
     for wk, ws in weights.items():
         url = f"https://cdn.jsdelivr.net/fontsource/fonts/{slug}@latest/{ws}.ttf"
@@ -170,6 +161,7 @@ def ensure_fonts(pptx_path):
             report["missing"].append(font)
     if report["installed"]:
         subprocess.run(["fc-cache", "-f"], capture_output=True)
+    print(f"[FONTS] found={len(report['found'])} installed={len(report['installed'])} missing={len(report['missing'])}", flush=True)
     return report
 
 
@@ -226,7 +218,7 @@ def convert_deck(deck_dir):
     total = len(doc)
     for i in range(total):
         page = doc[i]
-        mat = fitz.Matrix(2881 / page.rect.width, 1620 / page.rect.height)
+        mat = fitz.Matrix(1920 / page.rect.width, 1080 / page.rect.height)
         pix = page.get_pixmap(matrix=mat)
         pix.save(os.path.join(deck_dir, f"slide-{i + 1}.png"))
     doc.close()
