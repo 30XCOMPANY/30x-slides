@@ -458,6 +458,56 @@ function showUserText(t) { subtitleUser.textContent = t; subtitleUser.classList.
 function showBotText(t)  { subtitleBot.textContent = t; subtitleBot.classList.add('show'); subtitleArea.classList.add('show'); }
 function hideSubtitle()  { subtitleArea.classList.remove('show'); subtitleUser.classList.remove('show'); subtitleBot.classList.remove('show'); }
 
+function meaningfulGreetingText(text) {
+  const cleaned = String(text || '').replace(/[|/]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return null;
+  const lowered = cleaned.toLowerCase();
+  if (['problem', 'solution', 'roi', 'overview', 'summary', 'agenda', 'introduction', 'intro', 'results', 'next steps'].includes(lowered)) {
+    return null;
+  }
+  if (/\b20\d{2}\b/.test(lowered) && cleaned.split(' ').length <= 3) {
+    return null;
+  }
+  return cleaned;
+}
+
+function buildLocalGreeting() {
+  const phrases = [];
+  for (const slide of (slideContent || [])) {
+    const lines = Array.isArray(slide.text) ? slide.text : [];
+    for (const line of lines.slice(0, 3)) {
+      const phrase = meaningfulGreetingText(line);
+      if (!phrase) continue;
+      if (!phrases.some(existing => existing.toLowerCase() === phrase.toLowerCase())) {
+        phrases.push(phrase);
+      }
+      if (phrases.length >= 3) break;
+    }
+    if (phrases.length >= 3) break;
+  }
+
+  if (!phrases.length) {
+    return 'Hey, good to have you here. I can give you the big picture first, then walk through the details. What do you want to understand first?';
+  }
+
+  const summary = phrases.length === 1
+    ? phrases[0]
+    : phrases.length === 2
+      ? `${phrases[0]} and ${phrases[1]}`
+      : `${phrases[0]}, ${phrases[1]}, and ${phrases[2]}`;
+
+  return `Hey, good to have you here. This deck is really about ${summary}. I can give you the big picture, zoom into one section, or walk it slide by slide. What do you want to understand first?`;
+}
+
+function startGreeting() {
+  const greeting = buildLocalGreeting();
+  isBusy = false;
+  streamDone = true;
+  showBotText(greeting);
+  const sentences = greeting.match(/[^.!?]+[.!?]/g) || [greeting];
+  for (const sentence of sentences) enqueueSentenceSpeech(sentence.trim());
+}
+
 const thinkingLines = ['Brewing something good', 'One sec, brain loading', 'Consulting the slide gods', 'Almost there, hang tight', 'Crunching the slides', 'Let me cook'];
 function showThinking(isGreet) {
   const msg = isGreet ? 'Waking up your guide' : thinkingLines[Math.floor(Math.random() * thinkingLines.length)];
@@ -517,7 +567,7 @@ function toggleMic() {
     updateButton();
     if (!hasGreeted) {
       hasGreeted = true;
-      talkToBot('[GREET]');
+      startGreeting();
     } else {
       openMic();
     }
