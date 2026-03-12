@@ -541,16 +541,6 @@ def api_tts():
 # ============================================================
 # HTTP 路由
 # ============================================================
-@app.route("/debug/env")
-def debug_env():
-    """临时调试端点 — 部署成功后删除"""
-    return jsonify({
-        "MINIMAX_API_KEY": "SET" if os.environ.get("MINIMAX_API_KEY") else "MISSING",
-        "ELEVENLABS_API_KEY": "SET" if os.environ.get("ELEVENLABS_API_KEY") else "MISSING",
-        "ELEVENLABS_VOICE_ID": os.environ.get("ELEVENLABS_VOICE_ID", "MISSING"),
-    })
-
-
 @app.route("/")
 def index():
     return render_template("index.html")
