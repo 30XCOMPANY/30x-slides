@@ -1,10 +1,11 @@
 """
 [INPUT]: 依赖 anthropic SDK、services.config 的 provider 配置、services.decks 的 deck 上下文函数
-[OUTPUT]: 对外提供 talk 请求处理、session history 管理、回复裁剪与导航解析
+[OUTPUT]: 对外提供 talk 请求处理、流式事件输出、session history 管理、回复裁剪与导航解析
 [POS]: services 的对话层，被 app.py 的 /api/talk 路由消费
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 """
 
+import json
 import re
 
 from anthropic import Anthropic
@@ -58,6 +59,19 @@ def chat_with_llm(system_prompt, messages):
         flush=True,
     )
     return content
+
+
+def stream_chat_with_llm(system_prompt, messages):
+    client = Anthropic(api_key=get_anthropic_key(), timeout=20.0)
+    with client.messages.stream(
+        model=ANTHROPIC_MODEL,
+        max_tokens=96,
+        system=system_prompt,
+        messages=messages,
+    ) as stream:
+        for text in stream.text_stream:
+            if text:
+                yield text
 
 
 def ensure_interactive_ending(reply):
@@ -131,7 +145,7 @@ def ensure_deck_content(output_folder, deck_id, payload):
     return restore_deck_content(output_folder, deck_id, payload.get("all_content"))
 
 
-def build_talk_response(deck_id, payload, output_folder):
+def build_response_context(deck_id, payload, output_folder):
     text = payload.get("text", "").strip()
     slide_idx = payload.get("slide_index", 0)
     voice = payload.get("voice", "af_heart")
@@ -139,14 +153,9 @@ def build_talk_response(deck_id, payload, output_folder):
 
     print(f"[TALK] text={text}, slide={slide_idx}, voice={voice}", flush=True)
 
-    if not text:
-        return {"text": "", "audio": "", "nav": None}
-
     all_content = ensure_deck_content(output_folder, deck_id, payload)
-    system_prompt = build_system_prompt(all_content, slide_idx)
     normalized_text = text.lower()
     inferred_nav = infer_navigation_target(text, all_content, slide_idx)
-
     history_key = f"{deck_id}:{session_id}"
     history = _chat_histories.setdefault(history_key, [])
     is_internal = text.startswith("[")
@@ -155,12 +164,124 @@ def build_talk_response(deck_id, payload, output_folder):
         history = history[-40:]
         _chat_histories[history_key] = history
 
-    if not is_internal:
+    if not is_internal and text:
         history.append({"role": "user", "content": text})
 
     messages = list(history)
-    if is_internal:
+    if is_internal and text:
         messages.append({"role": "user", "content": text})
+
+    return {
+        "text": text,
+        "slide_idx": slide_idx,
+        "all_content": all_content,
+        "normalized_text": normalized_text,
+        "inferred_nav": inferred_nav,
+        "history_key": history_key,
+        "history": history,
+        "messages": messages,
+        "is_internal": is_internal,
+    }
+
+
+def split_completed_sentences(buffer):
+    parts = re.split(r"(?<=[.!?])\s+", buffer)
+    completed = [part.strip() for part in parts[:-1] if part.strip()]
+    remainder = parts[-1] if parts else ""
+    return completed, remainder
+
+
+def emit_event(event_type, **payload):
+    data = {"type": event_type}
+    data.update(payload)
+    return json.dumps(data, ensure_ascii=False) + "\n"
+
+
+def stream_scripted_reply(reply, nav_command=None):
+    cleaned = trim_spoken_reply(reply)
+    sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", cleaned) if sentence.strip()]
+    visible = ""
+    for sentence in sentences:
+        visible = (visible + " " + sentence).strip()
+        yield emit_event("text", text=visible)
+        yield emit_event("sentence", text=sentence)
+    yield emit_event("done", text=cleaned, nav=nav_command)
+
+
+def stream_talk_response(deck_id, payload, output_folder):
+    ctx = build_response_context(deck_id, payload, output_folder)
+    text = ctx["text"]
+    if not text:
+        yield emit_event("done", text="", nav=None)
+        return
+
+    all_content = ctx["all_content"]
+    slide_idx = ctx["slide_idx"]
+    normalized_text = ctx["normalized_text"]
+    inferred_nav = ctx["inferred_nav"]
+    messages = ctx["messages"]
+    history = ctx["history"]
+
+    if text == "[GREET]":
+        raw_reply = build_greeting(all_content)
+        history.append({"role": "assistant", "content": raw_reply})
+        yield from stream_scripted_reply(raw_reply, inferred_nav)
+        return
+
+    if normalized_text in {"hello", "hi", "hey", "hey there", "yo"} or should_use_local_explainer(text):
+        raw_reply = build_greeting(all_content) if normalized_text in {"hello", "hi", "hey", "hey there", "yo"} else build_local_slide_reply(all_content, slide_idx, text)
+        history.append({"role": "assistant", "content": raw_reply})
+        yield from stream_scripted_reply(raw_reply, inferred_nav)
+        return
+
+    system_prompt = build_system_prompt(all_content, slide_idx, allow_control_tags=False)
+    visible = ""
+    sentence_buffer = ""
+    completed_sentences = []
+    fallback_reply = None
+
+    try:
+        for delta in stream_chat_with_llm(system_prompt, messages):
+            sentence_buffer += delta
+            visible += delta
+            yield emit_event("text", text=visible.strip())
+            complete, sentence_buffer = split_completed_sentences(sentence_buffer)
+            for sentence in complete:
+                completed_sentences.append(sentence)
+                if len(completed_sentences) <= 5:
+                    yield emit_event("sentence", text=sentence)
+    except Exception as exc:
+        print(f"[LLM STREAM ERROR] {exc}", flush=True)
+        fallback_reply = build_local_slide_reply(all_content, slide_idx, text)
+
+    if fallback_reply:
+        history.append({"role": "assistant", "content": fallback_reply})
+        yield from stream_scripted_reply(fallback_reply, inferred_nav)
+        return
+
+    if sentence_buffer.strip():
+        completed_sentences.append(sentence_buffer.strip())
+        if len(completed_sentences) <= 5:
+            yield emit_event("sentence", text=sentence_buffer.strip())
+
+    raw_reply = " ".join(completed_sentences).strip()
+    raw_reply = trim_spoken_reply(raw_reply)
+    history.append({"role": "assistant", "content": raw_reply})
+    yield emit_event("done", text=raw_reply, nav=inferred_nav)
+
+
+def build_talk_response(deck_id, payload, output_folder):
+    text = payload.get("text", "").strip()
+    if not text:
+        return {"text": "", "audio": "", "nav": None}
+
+    ctx = build_response_context(deck_id, payload, output_folder)
+    all_content = ctx["all_content"]
+    slide_idx = ctx["slide_idx"]
+    normalized_text = ctx["normalized_text"]
+    inferred_nav = ctx["inferred_nav"]
+    history = ctx["history"]
+    messages = ctx["messages"]
 
     if text == "[GREET]":
         raw_reply = build_greeting(all_content)

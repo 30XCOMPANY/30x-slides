@@ -345,7 +345,7 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
     return " ".join(sentences[:5])
 
 
-def build_system_prompt(all_content, current_slide_idx):
+def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True):
     title_index = ""
     for slide_content in all_content:
         title = get_slide_title(slide_content)
@@ -359,21 +359,44 @@ def build_system_prompt(all_content, current_slide_idx):
         if slide_content.get("notes"):
             current_detail += f"\nSpeaker notes: {slide_content['notes']}"
 
-    nav_examples = ""
-    example_slides = []
-    for slide_content in all_content:
-        title = get_slide_title(slide_content)
-        if title and title.lower() not in IGNORED_TITLES:
-            example_slides.append((slide_content["slide"], title))
+    nav_block = ""
+    if allow_control_tags:
+        nav_examples = ""
+        example_slides = []
+        for slide_content in all_content:
+            title = get_slide_title(slide_content)
+            if title and title.lower() not in IGNORED_TITLES:
+                example_slides.append((slide_content["slide"], title))
 
-    for slide_number, slide_title in example_slides[:3]:
-        keyword = slide_title.split()[0].lower() if slide_title.split() else slide_title.lower()
-        nav_examples += (
-            f'- User says "{keyword}" → you write [GO:{slide_number}] '
-            f'because Slide {slide_number} is "{slide_title}"\n'
-        )
-    nav_examples += '- User says "next" → you write [GO:next]\n'
-    nav_examples += '- User says "go back" → you write [GO:prev]\n'
+        for slide_number, slide_title in example_slides[:3]:
+            keyword = slide_title.split()[0].lower() if slide_title.split() else slide_title.lower()
+            nav_examples += (
+                f'- User says "{keyword}" → you write [GO:{slide_number}] '
+                f'because Slide {slide_number} is "{slide_title}"\n'
+            )
+        nav_examples += '- User says "next" → you write [GO:next]\n'
+        nav_examples += '- User says "go back" → you write [GO:prev]\n'
+
+        nav_block = f"""
+===== NAVIGATION RULES (MANDATORY) =====
+When the user mentions ANY topic, keyword, or phrase that relates to a slide title, you MUST include [GO:N].
+
+EXAMPLES from this deck:
+{nav_examples}
+HOW IT WORKS: You write [GO:N] anywhere in your reply. The system removes it before showing to user and auto-jumps the slide.
+
+RULES:
+1. Match loosely. Any recognizable keyword should navigate.
+2. Never ask whether to navigate. Just include [GO:N].
+3. "next" → [GO:next], "back"/"previous" → [GO:prev].
+4. If user asks about a topic and you omit [GO:N], your response is wrong.
+5. Always include [GO:N] before your spoken text, like: [GO:3] So this one covers...
+======================================="""
+    else:
+        nav_block = """
+NAVIGATION:
+Do not output control tags or bracketed commands.
+Answer naturally only. Navigation is handled outside the model."""
 
     return f"""You explain slide content like a sharp human presenter. Talk about the idea underneath the slide, not the slide wording itself.
 
@@ -393,18 +416,4 @@ SLIDE TITLES:
 {title_index}
 CURRENT SLIDE:
 {current_detail}
-
-===== NAVIGATION RULES (MANDATORY) =====
-When the user mentions ANY topic, keyword, or phrase that relates to a slide title, you MUST include [GO:N].
-
-EXAMPLES from this deck:
-{nav_examples}
-HOW IT WORKS: You write [GO:N] anywhere in your reply. The system removes it before showing to user and auto-jumps the slide.
-
-RULES:
-1. Match loosely. Any recognizable keyword should navigate.
-2. Never ask whether to navigate. Just include [GO:N].
-3. "next" → [GO:next], "back"/"previous" → [GO:prev].
-4. If user asks about a topic and you omit [GO:N], your response is wrong.
-5. Always include [GO:N] before your spoken text, like: [GO:3] So this one covers...
-======================================="""
+{nav_block}"""

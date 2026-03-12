@@ -29,7 +29,7 @@ from flask import (
 from flask_socketio import SocketIO
 
 import fitz  # pymupdf
-from services.chat import build_talk_response
+from services.chat import build_talk_response, stream_talk_response
 from services.config import log_boot_env, validate_required_env
 from services.decks import extract_slide_content, load_deck_content, save_deck_content
 from services.tts import stream_fish_audio, synthesize_fish_audio
@@ -319,6 +319,21 @@ def apply_font_replacements(pptx_path, replacements, weight_map=None):
 def api_talk(deck_id):
     """用户说话 → 对话服务 → 返回 JSON {text, nav}"""
     return jsonify(build_talk_response(deck_id, request.json or {}, app.config["OUTPUT_FOLDER"]))
+
+
+@app.route("/api/talk/stream/<deck_id>", methods=["POST"])
+def api_talk_stream(deck_id):
+    """用户说话 → 对话服务流式输出 NDJSON {type, ...}"""
+    payload = request.json or {}
+    return Response(
+        stream_talk_response(deck_id, payload, app.config["OUTPUT_FOLDER"]),
+        mimetype="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
+        direct_passthrough=True,
+    )
 
 
 @app.route("/api/tts", methods=["POST"])

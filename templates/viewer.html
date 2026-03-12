@@ -439,6 +439,9 @@ let recognition = null;
 let isBusy = false;
 let hasGreeted = false;
 let speechFallback = null;
+let activeTalkController = null;
+let speechQueue = [];
+let streamDone = false;
 
 /* ---- 状态常量 ---- */
 const STATE = { IDLE: 0, LISTENING: 1, THINKING: 2, SPEAKING: 3 };
@@ -613,9 +616,15 @@ async function talkToBot(text) {
   showThinking(isGreet);
 
   try {
-    const resp = await fetch(`/api/talk/${deckId}`, {
+    if (activeTalkController) activeTalkController.abort();
+    activeTalkController = new AbortController();
+    streamDone = false;
+    speechQueue = [];
+
+    const resp = await fetch(`/api/talk/stream/${deckId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: activeTalkController.signal,
       body: JSON.stringify({
         text,
         slide_index: current,
@@ -624,60 +633,47 @@ async function talkToBot(text) {
         all_content: slideContent,
       }),
     });
-    const data = await resp.json();
 
-    showBotText(data.text || '');
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    /* 执行导航 */
-    if (data.nav) {
-      if (data.nav === 'next') { if (current < total - 1) goToSlide(current + 2); }
-      else if (data.nav === 'prev') { if (current > 0) goToSlide(current); }
-      else { const n = parseInt(data.nav); if (n >= 1 && n <= total) goToSlide(n); }
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+        if (event.type === 'text') {
+          showBotText(event.text || '');
+        } else if (event.type === 'sentence') {
+          enqueueSentenceSpeech(event.text || '');
+        } else if (event.type === 'done') {
+          streamDone = true;
+          isBusy = false;
+          activeTalkController = null;
+          showBotText(event.text || '');
+          applyNav(event.nav);
+          maybeResumeMic();
+        }
+      }
     }
 
-    isBusy = false;
-    if (data.text) {
-      speak(data.text);
-    } else {
-      /* 没有回复, 直接开麦 */
-      openMic();
+    if (!streamDone) {
+      isBusy = false;
+      activeTalkController = null;
+      maybeResumeMic();
     }
   } catch (e) {
+    if (e.name === 'AbortError') return;
     showBotText('Connection error');
     isBusy = false;
     openMic();
   }
-}
-
-/* ============================================================
-   ElevenLabs TTS
-   ============================================================ */
-function speak(text) {
-  killAudio();
-  startSpeechFallback(text);
-  const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
-  currentAudio = audio;
-
-  const activateFish = () => {
-    if (speechFallback) {
-      clearTimeout(speechFallback.timer);
-      speechFallback = null;
-    }
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-    voiceState = STATE.SPEAKING;
-    updateButton();
-  };
-
-  audio.oncanplay = activateFish;
-  audio.onplaying = activateFish;
-  audio.onended = () => {
-    currentAudio = null;
-    if (conversationMode) openMic();
-  };
-  audio.onerror = () => { openMic(); };
-  audio.play().catch(() => { openMic(); });
 }
 
 function startSpeechFallback(text) {
@@ -703,11 +699,16 @@ function startSpeechFallback(text) {
 }
 
 function killAudio() {
+  if (activeTalkController) {
+    activeTalkController.abort();
+    activeTalkController = null;
+  }
   if (currentAudio) {
     currentAudio.onended = null;
     currentAudio.pause();
     currentAudio = null;
   }
+  speechQueue = [];
   if (speechFallback) {
     clearTimeout(speechFallback.timer);
     speechFallback = null;
@@ -715,6 +716,76 @@ function killAudio() {
   if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
+}
+
+function applyNav(nav) {
+  if (!nav) return;
+  if (nav === 'next') {
+    if (current < total - 1) goToSlide(current + 2);
+    return;
+  }
+  if (nav === 'prev') {
+    if (current > 0) goToSlide(current);
+    return;
+  }
+  const n = parseInt(nav);
+  if (n >= 1 && n <= total) goToSlide(n);
+}
+
+function maybeResumeMic() {
+  if (!conversationMode) return;
+  if (isBusy) return;
+  if (currentAudio) return;
+  if (speechQueue.length) return;
+  openMic();
+}
+
+function playNextQueuedSentence() {
+  if (!conversationMode) return;
+  if (currentAudio) return;
+  if (!speechQueue.length) {
+    maybeResumeMic();
+    return;
+  }
+
+  const text = speechQueue.shift();
+  startSpeechFallback(text);
+  const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+  currentAudio = audio;
+
+  const activateFish = () => {
+    if (speechFallback) {
+      clearTimeout(speechFallback.timer);
+      speechFallback = null;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    voiceState = STATE.SPEAKING;
+    updateButton();
+  };
+
+  audio.oncanplay = activateFish;
+  audio.onplaying = activateFish;
+  audio.onended = () => {
+    currentAudio = null;
+    playNextQueuedSentence();
+  };
+  audio.onerror = () => {
+    currentAudio = null;
+    playNextQueuedSentence();
+  };
+  audio.play().catch(() => {
+    currentAudio = null;
+    playNextQueuedSentence();
+  });
+}
+
+function enqueueSentenceSpeech(text) {
+  const cleaned = (text || '').trim();
+  if (!cleaned) return;
+  speechQueue.push(cleaned);
+  playNextQueuedSentence();
 }
 </script>
 </body>
