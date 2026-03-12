@@ -194,7 +194,7 @@ def split_completed_sentences(buffer):
 def emit_event(event_type, **payload):
     data = {"type": event_type}
     data.update(payload)
-    return json.dumps(data, ensure_ascii=False) + "\n"
+    return (json.dumps(data, ensure_ascii=False) + "\n").encode("utf-8")
 
 
 def stream_scripted_reply(reply, nav_command=None):
