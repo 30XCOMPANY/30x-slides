@@ -5,4 +5,4 @@ aptPkgs = ["python3-pip", "libreoffice-core", "libreoffice-impress", "libreoffic
 cmds = ["pip3 install --break-system-packages -r requirements.txt"]
 
 [start]
-cmd = "python -m gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 2 --timeout 120 app:app"
+cmd = "python3 -m gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 2 --timeout 120 app:app"
