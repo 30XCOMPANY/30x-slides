@@ -798,7 +798,12 @@ function flushPendingSpeech() {
   pendingSentenceCount = 0;
   if (!cleaned) return;
   speechQueue.push({ ttsText: cleaned, displayText: cleaned });
-  playNextQueuedSentence();
+  /* 如果当前有音频在播但还没预加载下一段, 立刻预加载 */
+  if (currentAudio && !preloadedSegment) {
+    preloadNextAudio();
+  } else {
+    playNextQueuedSentence();
+  }
 }
 
 let pendingSentenceCount = 0;
@@ -809,8 +814,8 @@ function enqueueSentenceSpeech(text) {
   pendingSpeechText = pendingSpeechText ? `${pendingSpeechText} ${cleaned}` : cleaned;
   pendingSentenceCount++;
   clearTimeout(pendingSpeechTimer);
-  /* 攒 3+ 句 或 400+ 字符再发 TTS, 减少请求次数 + 预加载消除间隔 */
-  const shouldFlushNow = pendingSentenceCount >= 3 || pendingSpeechText.length >= 400;
+  /* 2 句一批 + 预加载 = 流畅衔接; 批太大反而延迟首音 */
+  const shouldFlushNow = pendingSentenceCount >= 2 || pendingSpeechText.length >= 300;
   if (shouldFlushNow) {
     flushPendingSpeech();
     return;

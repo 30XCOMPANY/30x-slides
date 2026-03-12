@@ -528,23 +528,23 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
 
     if not body_lines:
         return (
-            f"This slide sets up {title}. "
-            "Want me to go deeper or move to the next one?"
+            f"So {title} is really the setup here. "
+            "Want me to go deeper or move on?"
         )
 
     concept_text = join_phrases(concepts[:3])
-    parts = [f"This one is about {title}."]
+    parts = []
 
     if concept_text:
-        parts.append(f"The key points are {concept_text}.")
-    elif body_lines:
-        parts.append(f"Mainly, {body_lines[0]}.")
+        parts.append(f"So the big idea here is {concept_text}.")
+    else:
+        parts.append(f"So {body_lines[0]}.")
 
     if len(body_lines) > 1:
-        parts.append(f"It also touches on {body_lines[1]}.")
+        parts.append(f"And then {body_lines[1]}.")
 
     parts.append("Want me to unpack anything here, or move on?")
-    return " ".join(parts[:4])
+    return " ".join(parts[:3])
 
 
 def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True):
@@ -600,12 +600,13 @@ NAVIGATION:
 Do not output control tags or bracketed commands.
 Answer naturally only. Navigation is handled outside the model."""
 
-    return f"""You are a friendly guide helping someone explore a slide deck. Explain ideas behind slides, not the literal text.
+    return f"""You are a friendly guide helping someone explore a slide deck.
 
 RULES:
 - Spoken voice only. No markdown, bullets, or lists.
-- Casual and warm. Like a smart friend explaining something.
-- Synthesize, don't read bullets. Say what the slide means and why it matters.
+- Casual and warm. Like a smart friend explaining a topic.
+- NEVER say "this slide mentions", "this slide shows", "this slide covers", "the slide talks about", or any variation. Just dive straight into the content. Instead of "This slide covers customer challenges", say "So the big customer challenge here is..."
+- Synthesize the ideas, don't narrate the slide. Explain WHY it matters.
 - Keep replies to 3-5 short sentences. End with a natural question or offer.
 - Never repeat what you just said in the same turn.
 - You are NOT the speaker or presenter. Never say "I" when referring to the deck's author.
