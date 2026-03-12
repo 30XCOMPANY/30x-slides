@@ -63,6 +63,7 @@
     inset: 0;
     z-index: 0;
     overflow: hidden;
+    background: #17161c;
   }
   .hero-video {
     position: absolute;
@@ -71,7 +72,10 @@
     height: 100%;
     object-fit: cover;
     filter: saturate(0.92) contrast(0.95) brightness(1.02);
+    opacity: 0;
+    transition: opacity 0.6s ease;
   }
+  .hero-video.loaded { opacity: 1; }
 
   /* 视频上层叠加 — 复刻 hero-video-overlay 多层渐变 */
   .hero-overlay {
@@ -248,7 +252,8 @@
 <body>
 
 <div class="hero-bg">
-  <video class="hero-video" autoplay muted loop playsinline>
+  <video class="hero-video" autoplay muted loop playsinline preload="auto"
+    oncanplaythrough="this.classList.add('loaded')" onplaying="this.classList.add('loaded')">
     <source src="/static/hero-bg.mp4" type="video/mp4">
   </video>
   <div class="hero-overlay"></div>
