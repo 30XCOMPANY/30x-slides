@@ -4,7 +4,7 @@ Stack: Flask + SocketIO + LibreOffice + pymupdf + Anthropic + Fish Audio
 
 [INPUT]: PPTX file upload and viewer talk requests with optional slide context
 [OUTPUT]: Interactive slide viewer with voice bot + downloadable HTML
-[POS]: Application entry point, orchestrates conversion, deck state, and voice pipeline
+[POS]: Application entry point, orchestrates upload, conversion, and service wiring
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 """
 
@@ -15,8 +15,6 @@ import uuid
 import base64
 import subprocess
 import urllib.request
-import urllib.error
-import threading
 import tempfile
 import time
 from pathlib import Path
@@ -26,11 +24,15 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
 from flask import (
     Flask, request, redirect, url_for,
-    render_template, send_from_directory, jsonify, Response,
+    render_template, send_from_directory, jsonify,
 )
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 
 import fitz  # pymupdf
+from services.chat import build_talk_response
+from services.config import log_boot_env, validate_required_env
+from services.decks import extract_slide_content, load_deck_content, save_deck_content
+from services.tts import synthesize_fish_audio
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "30x-slides-secret"
@@ -47,51 +49,8 @@ else:
     FONT_DIR = Path.home() / ".local" / "share" / "fonts"
 FONT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ---- 环境变量启动诊断 ----
-def _clean_env_value(value):
-    return re.sub(r"\s+", "", value or "")
-
-
-def _env_flag(name):
-    value = _clean_env_value(os.environ.get(name, ""))
-    return "SET" if value.strip() else "MISSING"
-
-print(
-    f"[BOOT] cwd={os.getcwd()} file_dir={Path(__file__).parent} "
-    f"ANTHROPIC_API_KEY={_env_flag('ANTHROPIC_API_KEY')} "
-    f"FISH_AUDIO_API_KEY={_env_flag('FISH_AUDIO_API_KEY')} "
-    f"FISH_AUDIO_REFERENCE_ID={_env_flag('FISH_AUDIO_REFERENCE_ID')}",
-    flush=True,
-)
-
-
-# ---- API Keys (运行时读取，兼容 Railway 注入) ----
-ANTHROPIC_MODEL = "claude-haiku-4-5"
-REQUIRED_ENV_VARS = ("ANTHROPIC_API_KEY", "FISH_AUDIO_API_KEY")
-
-
-def _validate_required_env():
-    missing = [name for name in REQUIRED_ENV_VARS if not _clean_env_value(os.environ.get(name, ""))]
-    if missing:
-        raise RuntimeError(
-            "Missing required environment variables: "
-            + ", ".join(missing)
-            + ". Set them in Railway Variables or local .env."
-        )
-
-
-_validate_required_env()
-
-def get_anthropic_key():
-    return _clean_env_value(os.environ.get("ANTHROPIC_API_KEY", ""))
-
-def get_fish_audio_key():
-    return _clean_env_value(os.environ.get("FISH_AUDIO_API_KEY", ""))
-
-def get_fish_audio_reference_id():
-    return _clean_env_value(
-        os.environ.get("FISH_AUDIO_REFERENCE_ID", os.environ.get("FISH_AUDIO_VOICE_ID", ""))
-    )
+log_boot_env()
+validate_required_env()
 
 
 
@@ -306,8 +265,7 @@ def convert_deck(deck_dir):
 
     with open(os.path.join(deck_dir, "meta.txt"), "w") as f:
         f.write(str(total))
-    with open(os.path.join(deck_dir, "content.json"), "w") as f:
-        json.dump(content, f, ensure_ascii=False)
+    save_deck_content(app.config["OUTPUT_FOLDER"], os.path.basename(deck_dir), content)
 
     elapsed = time.perf_counter() - started_at
     print(f"[CONVERT] deck={os.path.basename(deck_dir)} slides={total} elapsed={elapsed:.2f}s", flush=True)
@@ -355,309 +313,23 @@ def apply_font_replacements(pptx_path, replacements, weight_map=None):
 
 
 # ============================================================
-# LLM — Anthropic
-# ============================================================
-def chat_with_llm(system_prompt, messages):
-    """Call Anthropic with the official SDK."""
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=get_anthropic_key())
-    response = client.messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=80,
-        system=system_prompt,
-        messages=messages,
-    )
-
-    text_blocks = [
-        block.text
-        for block in response.content
-        if getattr(block, "type", "") == "text" and getattr(block, "text", "")
-    ]
-    content = "".join(text_blocks).strip()
-    if not content:
-        content = "I'm not sure how to respond to that."
-    print(f"[LLM] model={ANTHROPIC_MODEL} content_present={bool(content)} len={len(content)}", flush=True)
-    return content
-
-
-
-# ============================================================
-# 加载 deck 内容
-# ============================================================
-def load_deck_content(deck_id):
-    deck_dir = os.path.join(app.config["OUTPUT_FOLDER"], deck_id)
-    content_path = os.path.join(deck_dir, "content.json")
-    if os.path.exists(content_path):
-        with open(content_path) as f:
-            return json.load(f)
-    return []
-
-
-def save_deck_content(deck_id, content):
-    deck_dir = os.path.join(app.config["OUTPUT_FOLDER"], deck_id)
-    os.makedirs(deck_dir, exist_ok=True)
-    content_path = os.path.join(deck_dir, "content.json")
-    with open(content_path, "w") as f:
-        json.dump(content, f, ensure_ascii=False)
-
-
-def normalize_deck_content(raw_content):
-    """Accept trusted deck content from the viewer when container-local files are gone."""
-    if not isinstance(raw_content, list):
-        return []
-
-    normalized = []
-    for index, item in enumerate(raw_content, start=1):
-        if not isinstance(item, dict):
-            continue
-
-        texts = item.get("text", [])
-        if not isinstance(texts, list):
-            texts = []
-        texts = [str(line).strip() for line in texts if str(line).strip()]
-
-        notes = item.get("notes", "")
-        if not isinstance(notes, str):
-            notes = str(notes or "")
-
-        slide_number = item.get("slide", index)
-        try:
-            slide_number = int(slide_number)
-        except Exception:
-            slide_number = index
-
-        normalized.append({
-            "slide": slide_number,
-            "text": texts,
-            "notes": notes.strip(),
-        })
-
-    return normalized
-
-
-def get_slide_title(sc):
-    """提取 slide 标题 (第一个文字元素)"""
-    return sc["text"][0] if sc.get("text") else f"Slide {sc['slide']}"
-
-
-def build_greeting(all_content):
-    """Build a deterministic host-style greeting so first contact never depends on LLM health."""
-    ignored = {"title slide", "thank you", "questions", "end", ""}
-    titles = []
-    seen = set()
-
-    for sc in all_content:
-        title = get_slide_title(sc).strip()
-        normalized = title.lower()
-        if normalized in ignored or normalized in seen:
-            continue
-        seen.add(normalized)
-        titles.append(title)
-
-    if not titles:
-        return "Alright, I can give you the quick story here and we can jump straight to whatever matters most. Where do you wanna start?"
-
-    themes = titles[:5]
-    if len(themes) == 1:
-        return f"Alright, this one really centers on {themes[0]}, and I can walk you through the important bits fast. Where do you wanna start?"
-
-    if len(themes) == 2:
-        theme_text = f"{themes[0]} and {themes[1]}"
-    else:
-        theme_text = ", ".join(themes[:-1]) + f", and {themes[-1]}"
-
-    return f"Alright, we can move through {theme_text}, and I can take you straight to the part you care about most. Where do you wanna start?"
-
-
-def build_system_prompt(all_content, current_slide_idx):
-    """构建 system prompt: 标题索引 + 当前 slide 详情"""
-
-    # ---- 标题索引 (简洁、稳定) ----
-    title_index = ""
-    for sc in all_content:
-        title = get_slide_title(sc)
-        title_index += f"  Slide {sc['slide']}: {title}\n"
-
-    # ---- 当前 slide 完整内容 ----
-    current_detail = ""
-    if 0 <= current_slide_idx < len(all_content):
-        sc = all_content[current_slide_idx]
-        current_detail = f"Slide {sc['slide']} — {get_slide_title(sc)}:\n"
-        current_detail += "\n".join(sc["text"])
-        if sc.get("notes"):
-            current_detail += f"\nSpeaker notes: {sc['notes']}"
-
-    # ---- 动态生成导航示例 (从实际标题中选 2-3 个) ----
-    nav_examples = ""
-    example_slides = []
-    for sc in all_content:
-        t = get_slide_title(sc)
-        if t and t.lower() not in ("title slide", "thank you", "questions", "end", ""):
-            example_slides.append((sc["slide"], t))
-    # 选最多 3 个作为具体示例
-    for idx, (snum, stitle) in enumerate(example_slides[:3]):
-        keyword = stitle.split()[0].lower() if stitle.split() else stitle.lower()
-        nav_examples += f'- User says "{keyword}" → you write [GO:{snum}] because Slide {snum} is "{stitle}"\n'
-    nav_examples += '- User says "next" → you write [GO:next]\n'
-    nav_examples += '- User says "go back" → you write [GO:prev]\n'
-
-    return f"""You explain slide content directly — just talk about the topic itself. Don't refer to "the company", "they", or "we" unless the slide content naturally calls for it. Just explain the actual ideas, facts, and concepts on the slides like you're teaching a friend.
-
-Spoken voice only — no markdown, no bullets, no formatting.
-
-VIBE: Casual like "So basically...", "Oh nice,", "Yeah so the idea here is...". NEVER say "this presentation", "this deck", "this slide says".
-
-[GREET]: Under 40 words. One sentence summary of the topic, name 4-5 main themes from the slide titles, end with "Where do you wanna start?" Do NOT include [GO:N] in greeting.
-
-REPLIES: MAX 30 WORDS. One short sentence to answer, one short question back. That's it. Never ramble.
-
-Viewer is on Slide {current_slide_idx + 1} of {len(all_content)}.
-
-SLIDE TITLES:
-{title_index}
-CURRENT SLIDE:
-{current_detail}
-
-===== NAVIGATION RULES (MANDATORY — READ CAREFULLY) =====
-When the user mentions ANY topic, keyword, or phrase that relates to a slide title, you MUST include [GO:N] in your reply (N = slide number).
-
-EXAMPLES from this deck:
-{nav_examples}
-HOW IT WORKS: You write [GO:N] anywhere in your reply. The system removes it before showing to user and auto-jumps the slide. The user never sees [GO:N].
-
-RULES:
-1. Match loosely — if user says ANY word from a slide title, navigate there.
-2. NEVER ask "want me to go there?" — just include [GO:N] and describe the content.
-3. "next" → [GO:next], "back"/"previous" → [GO:prev]
-4. If user asks about a topic and you DON'T include [GO:N], your response is WRONG.
-5. Always include [GO:N] BEFORE your spoken text, like: [GO:3] So this one covers...
-================================================"""
-
-
-# ---- 每个 session 的对话历史 ----
-_chat_histories = {}
-
-
-# ============================================================
 # HTTP API — 对话式语音导览 (比 WebSocket 更稳定)
 # ============================================================
 @app.route("/api/talk/<deck_id>", methods=["POST"])
 def api_talk(deck_id):
-    """用户说话 → LLM 对话 → TTS → 返回 JSON {text, audio, nav}"""
-    data = request.json
-    text = data.get("text", "").strip()
-    slide_idx = data.get("slide_index", 0)
-    voice = data.get("voice", "af_heart")
-    session_id = data.get("session_id", "default")
-
-    print(f"[TALK] text={text}, slide={slide_idx}, voice={voice}", flush=True)
-
-    if not text:
-        return jsonify({"text": "", "audio": "", "nav": None})
-
-    all_content = load_deck_content(deck_id)
-
-    # 如果 content.json 不存在，尝试从 PPTX 提取
-    if not all_content:
-        deck_dir = os.path.join(app.config["OUTPUT_FOLDER"], deck_id)
-        pptx_path = os.path.join(deck_dir, "deck.pptx")
-        if os.path.exists(pptx_path):
-            all_content = extract_slide_content(pptx_path)
-            save_deck_content(deck_id, all_content)
-            print(f"[TALK] extracted {len(all_content)} slides content", flush=True)
-
-    if not all_content:
-        client_content = normalize_deck_content(data.get("all_content"))
-        if client_content:
-            all_content = client_content
-            save_deck_content(deck_id, all_content)
-            print(f"[TALK] restored {len(all_content)} slides content from viewer payload", flush=True)
-
-    system_prompt = build_system_prompt(all_content, slide_idx)
-
-    # ---- 对话历史 ----
-    history_key = f"{deck_id}:{session_id}"
-    if history_key not in _chat_histories:
-        _chat_histories[history_key] = []
-    history = _chat_histories[history_key]
-    is_internal = text.startswith("[")
-
-    if len(history) > 40:
-        history = history[-40:]
-        _chat_histories[history_key] = history
-
-    if not is_internal:
-        history.append({"role": "user", "content": text})
-
-    messages = list(history)
-    if is_internal:
-        messages.append({"role": "user", "content": text})
-
-    # ---- LLM ----
-    if text == "[GREET]":
-        try:
-            reply = chat_with_llm(system_prompt, messages)
-            print(f"[GREET LLM] {reply[:120]}", flush=True)
-        except Exception as e:
-            print(f"[GREET FALLBACK] {e}", flush=True)
-            reply = build_greeting(all_content)
-            print(f"[GREET LOCAL] {reply}", flush=True)
-    else:
-        try:
-            reply = chat_with_llm(system_prompt, messages)
-            print(f"[LLM] {reply[:120]}", flush=True)
-        except Exception as e:
-            print(f"[LLM ERROR] {e}", flush=True)
-            reply = "Sorry, let me try again."
-
-    history.append({"role": "assistant", "content": reply})
-
-    # ---- 解析导航 ----
-    nav_command = None
-    nav_match = re.search(r'\[GO:(\w+)\]', reply)
-    if nav_match:
-        nav_command = nav_match.group(1)
-        reply = re.sub(r'\s*\[GO:\w+\]\s*', '', reply).strip()
-
-    return jsonify({"text": reply, "nav": nav_command})
+    """用户说话 → 对话服务 → 返回 JSON {text, nav}"""
+    return jsonify(build_talk_response(deck_id, request.json or {}, app.config["OUTPUT_FOLDER"]))
 
 
 @app.route("/api/tts", methods=["POST"])
 def api_tts():
     """Fish Audio TTS — 返回 base64 mp3"""
-    data = request.json
+    data = request.json or {}
     text = data.get("text", "").strip()
-    if not text:
-        return jsonify({"audio": ""})
-
-    print(f"[TTS] Fish Audio request: {len(text)} chars", flush=True)
-
     try:
-        url = "https://api.fish.audio/v1/tts"
-        payload = json.dumps({
-            "text": text,
-            "reference_id": get_fish_audio_reference_id(),
-            "format": "mp3",
-        })
-        req = urllib.request.Request(
-            url,
-            data=payload.encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {get_fish_audio_key()}",
-                "model": "s2-pro",
-            },
-        )
-
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            audio_bytes = resp.read()
-
-        audio_b64 = base64.b64encode(audio_bytes).decode()
-        print(f"[TTS] Fish Audio OK: {len(audio_bytes)} bytes", flush=True)
-        return jsonify({"audio": audio_b64})
-    except Exception as e:
-        print(f"[TTS ERROR] {e}", flush=True)
+        return jsonify({"audio": synthesize_fish_audio(text)})
+    except Exception as exc:
+        print(f"[TTS ERROR] {exc}", flush=True)
         return jsonify({"audio": ""})
 
 
@@ -719,8 +391,7 @@ def viewer(deck_id):
     content = []
     content_path = os.path.join(deck_dir, "content.json")
     if os.path.exists(content_path):
-        with open(content_path) as f:
-            content = json.load(f)
+        content = load_deck_content(app.config["OUTPUT_FOLDER"], deck_id)
 
     return render_template(
         "viewer.html",
@@ -782,8 +453,7 @@ def download(deck_id):
     content = []
     content_path = os.path.join(deck_dir, "content.json")
     if os.path.exists(content_path):
-        with open(content_path) as f:
-            content = json.load(f)
+        content = load_deck_content(app.config["OUTPUT_FOLDER"], deck_id)
 
     # 获取当前服务器地址
     server_url = request.host_url.rstrip("/")
