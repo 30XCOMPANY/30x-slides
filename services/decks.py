@@ -319,19 +319,21 @@ def build_greeting(all_content):
     themes = extract_theme_phrases(all_content)
     if not themes:
         return (
-            "Hey, good to have you here. I can walk you through the main sections in this deck, "
-            "give you the big-picture summary, and then slow down anywhere you want. "
-            "What do you want to dig into first?"
+            "Hey, glad you're here. I can map out the big sections in this deck, give you the fast overview, "
+            "and then slow down wherever you want. What do you want to get into first?"
         )
-    section_text = join_phrases(themes[:3])
-    summary = (
-        f"At a high level, the story is really about {themes[0]} and why it matters."
-        if len(themes) == 1
-        else "At a high level, it connects those sections into one clear story instead of leaving them as separate bullets."
-    )
+    sections = themes[:3]
+    section_text = join_phrases(sections)
+    if len(sections) == 1:
+        summary = f"At a high level, the story is really about {sections[0]} and why it matters."
+    else:
+        summary = (
+            f"So the deck really moves through {section_text}, "
+            "and ties those pieces into one clear story instead of leaving them as separate bullets."
+        )
 
     return (
-        f"Hey, good to have you here. The main sections here are {section_text}. "
+        f"Hey, glad you're here. The main sections here are {section_text}. "
         f"{summary} What do you want to start with?"
     )
 

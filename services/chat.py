@@ -277,8 +277,17 @@ def stream_talk_response(deck_id, payload, output_folder):
         yield from stream_scripted_reply(raw_reply, inferred_nav)
         return
 
-    if normalized_text in {"hello", "hi", "hey", "hey there", "yo"} or should_use_local_explainer(text):
-        raw_reply = build_greeting(all_content) if normalized_text in {"hello", "hi", "hey", "hey there", "yo"} else build_local_slide_reply(all_content, slide_idx, text)
+    if normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
+        raw_reply = (
+            "I am here with you. You can ask about this slide, ask for the bigger picture, "
+            "or name a section you want to jump into. What do you want to look at first?"
+        )
+        history.append({"role": "assistant", "content": raw_reply})
+        yield from stream_scripted_reply(raw_reply, None)
+        return
+
+    if should_use_local_explainer(text):
+        raw_reply = build_local_slide_reply(all_content, slide_idx, text)
         history.append({"role": "assistant", "content": raw_reply})
         yield from stream_scripted_reply(raw_reply, inferred_nav)
         return
@@ -337,7 +346,10 @@ def build_talk_response(deck_id, payload, output_folder):
         raw_reply = build_greeting(all_content)
         print(f"[GREET LOCAL] {raw_reply}", flush=True)
     elif normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
-        raw_reply = build_greeting(all_content)
+        raw_reply = (
+            "I am here with you. You can ask about this slide, ask for the bigger picture, "
+            "or name a section you want to jump into. What do you want to look at first?"
+        )
         print(f"[SMALLTALK LOCAL] {raw_reply}", flush=True)
     elif should_use_local_explainer(text):
         raw_reply = build_local_slide_reply(all_content, slide_idx, text)
