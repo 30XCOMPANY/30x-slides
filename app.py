@@ -48,6 +48,10 @@ else:
 FONT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---- 环境变量启动诊断 ----
+def _clean_env_value(value):
+    return re.sub(r"\s+", "", value or "")
+
+
 def _env_flag(name):
     value = _clean_env_value(os.environ.get(name, ""))
     return "SET" if value.strip() else "MISSING"
@@ -70,10 +74,6 @@ MINIMAX_ANTHROPIC_BASE_URLS = (
     "https://api.minimaxi.com/anthropic",
 )
 REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "FISH_AUDIO_API_KEY")
-
-
-def _clean_env_value(value):
-    return re.sub(r"\s+", "", value or "")
 
 
 def _validate_required_env():
