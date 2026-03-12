@@ -16,8 +16,6 @@ venv/
 *.wav
 *.mp3
 
-# ---- Large media ----
-static/hero-bg.mp4
 
 # ---- OS junk ----
 .DS_Store
