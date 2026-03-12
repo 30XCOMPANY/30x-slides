@@ -21,10 +21,20 @@ from services.decks import (
 )
 
 _chat_histories = {}
+LOCAL_FAST_PATTERNS = (
+    "what is this slide about",
+    "what's this slide about",
+    "summarize this",
+    "summary",
+    "quick summary",
+    "what is happening here",
+    "what's happening here",
+    "explain this slide",
+)
 
 
 def chat_with_llm(system_prompt, messages):
-    client = Anthropic(api_key=get_anthropic_key())
+    client = Anthropic(api_key=get_anthropic_key(), timeout=6.0)
     response = client.messages.create(
         model=ANTHROPIC_MODEL,
         max_tokens=48,
@@ -48,27 +58,41 @@ def chat_with_llm(system_prompt, messages):
     return content
 
 
-def trim_spoken_reply(reply, max_chars=220, max_words=36):
+def ensure_interactive_ending(reply):
+    reply = (reply or "").strip()
+    if not reply:
+        return "Do you want the short version, the deeper takeaway, or the next slide?"
+
+    interactive_markers = ("do you want", "want the", "should i", "which part", "where do you want", "how do you want")
+    if any(marker in reply.lower() for marker in interactive_markers):
+        return reply
+
+    if reply[-1] not in ".!?":
+        reply += "."
+    return reply + " Do you want the short version, the deeper takeaway, or the next slide?"
+
+
+def trim_spoken_reply(reply, max_chars=320, max_words=55):
     reply = re.sub(r"\s+", " ", (reply or "")).strip()
     if not reply:
         return ""
 
     sentences = re.split(r"(?<=[.!?])\s+", reply)
-    first_three = " ".join(sentences[:3]).strip()
-    if first_three and len(first_three) <= max_chars:
-        return first_three
+    first_five = " ".join(sentences[:5]).strip()
+    if first_five and len(first_five) <= max_chars:
+        return ensure_interactive_ending(first_five)
 
     words = reply.split()
     if len(words) > max_words:
         clipped = " ".join(words[:max_words]).strip(" ,;:-")
         if clipped and clipped[-1] not in ".!?":
             clipped += "."
-        return clipped
+        return ensure_interactive_ending(clipped)
 
     clipped = reply[:max_chars].rsplit(" ", 1)[0].strip(" ,;:-")
     if clipped and clipped[-1] not in ".!?":
         clipped += "."
-    return clipped or reply[:max_chars]
+    return ensure_interactive_ending(clipped or reply[:max_chars])
 
 
 def parse_nav_command(reply):
@@ -113,6 +137,7 @@ def build_talk_response(deck_id, payload, output_folder):
 
     all_content = ensure_deck_content(output_folder, deck_id, payload)
     system_prompt = build_system_prompt(all_content, slide_idx)
+    normalized_text = text.lower()
 
     history_key = f"{deck_id}:{session_id}"
     history = _chat_histories.setdefault(history_key, [])
@@ -129,14 +154,15 @@ def build_talk_response(deck_id, payload, output_folder):
     if is_internal:
         messages.append({"role": "user", "content": text})
 
-    normalized_text = text.lower()
-
     if text == "[GREET]":
         raw_reply = build_greeting(all_content)
         print(f"[GREET LOCAL] {raw_reply}", flush=True)
     elif normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
         raw_reply = build_greeting(all_content)
         print(f"[SMALLTALK LOCAL] {raw_reply}", flush=True)
+    elif any(pattern in normalized_text for pattern in LOCAL_FAST_PATTERNS):
+        raw_reply = build_local_slide_reply(all_content, slide_idx, text)
+        print(f"[LOCAL FAST] {raw_reply[:120]}", flush=True)
     else:
         try:
             raw_reply = chat_with_llm(system_prompt, messages)

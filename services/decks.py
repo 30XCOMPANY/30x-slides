@@ -139,7 +139,12 @@ def build_greeting(all_content):
 def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
     """Fallback explanation when the hosted LLM is unavailable."""
     if not all_content:
-        return "I can keep going, but I need the slide content loaded first. Want the quick summary or slide-by-slide version?"
+        return (
+            "I can keep going, but I need the slide content loaded first. "
+            "Right now I do not have the actual slide details. "
+            "Once the content is loaded, I can break it down clearly. "
+            "Do you want the quick summary, the key takeaway, or the slide-by-slide version?"
+        )
 
     if current_slide_idx < 0 or current_slide_idx >= len(all_content):
         current_slide_idx = 0
@@ -150,11 +155,33 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
     body_lines = body_lines[1:4] if len(body_lines) > 1 else body_lines[:3]
 
     if not body_lines:
-        return f"This part is about {title}. Do you want the short version, the key takeaway, or the next slide?"
+        return (
+            f"This part is about {title}. "
+            "It looks like the slide is setting up the main idea more than giving detail. "
+            "I can still help you frame what matters here. "
+            "Do you want the short version, the key takeaway, or the next slide?"
+        )
 
-    snippet = "; ".join(body_lines)
-    reply = f"This part is about {title}: {snippet}. Want the short version, the key takeaway, or the next slide?"
-    return reply[:220].rstrip(" ,;:-") + ("." if not reply.endswith(".") else "")
+    first = body_lines[0]
+    second = body_lines[1] if len(body_lines) > 1 else ""
+    third = body_lines[2] if len(body_lines) > 2 else ""
+
+    sentences = [
+        f"This part is about {title}.",
+        f"The main point here is {first}.",
+    ]
+    if second:
+        sentences.append(f"It also highlights {second}.")
+    elif third:
+        sentences.append(f"It also points toward {third}.")
+    else:
+        sentences.append("So the slide is really framing the core takeaway.")
+    if third and second:
+        sentences.append(f"The extra context is {third}.")
+    else:
+        sentences.append("That gives you the core idea without overcomplicating it.")
+    sentences.append("Do you want the short version, the deeper takeaway, or the next slide?")
+    return " ".join(sentences[:5])
 
 
 def build_system_prompt(all_content, current_slide_idx):
@@ -195,7 +222,7 @@ VIBE: Casual, warm, and tutor-like. Sound like a smart human guide, not a narrat
 
 [GREET]: Under 34 words. First summarize what this deck is about in plain language, mention 2-4 main themes, then ask "How do you wanna learn this?" Do NOT include [GO:N].
 
-REPLIES: MAX 3 short sentences. Answer briefly, then offer a clear next move like "Want the short version, the deeper takeaway, or the next slide?" Keep it natural and conversational.
+REPLIES: ALWAYS 3-5 short sentences. The last sentence MUST be interactive and invite the user to choose a next move, like "Do you want the short version, the deeper takeaway, or the next slide?" Keep it natural and conversational.
 
 Viewer is on Slide {current_slide_idx + 1} of {len(all_content)}.
 
