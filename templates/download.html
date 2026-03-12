@@ -1,3 +1,9 @@
+<!--
+[INPUT]: 依赖 Flask 注入的 deck_id、total、slides_data、slide_content、server_url
+[OUTPUT]: 对外提供可离线分发的交互式下载页与远程 AI/TTS 协议
+[POS]: templates 的导出页，被 /download/<deck_id> 路由渲染
+[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -145,6 +151,7 @@
 const total = {{ total }};
 const deckId = "{{ deck_id }}";
 const serverUrl = "{{ server_url }}";
+const slideContent = {{ slide_content|tojson }};
 let current = 0;
 
 function go(d) {
@@ -205,6 +212,7 @@ async function talkToBot(text) {
         slide_index: current,
         voice: getVoice(),
         session_id: sessionId,
+        all_content: slideContent,
       }),
     });
     const data = await resp.json();
