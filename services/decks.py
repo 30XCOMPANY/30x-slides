@@ -7,9 +7,20 @@
 
 import json
 import os
+import re
 
 
 IGNORED_TITLES = {"title slide", "thank you", "questions", "end", ""}
+
+
+def normalize_spoken_text(text):
+    """Strip visual separators that sound awkward in speech."""
+    text = str(text or "")
+    text = text.replace("|", ", ")
+    text = text.replace("/", ", ")
+    text = re.sub(r"\s*,\s*,+", ", ", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip(" ,")
 
 
 def extract_slide_content(pptx_path):
@@ -27,11 +38,11 @@ def extract_slide_content(pptx_path):
                 for para in shape.text_frame.paragraphs:
                     line = para.text.strip()
                     if line:
-                        texts.append(line)
+                        texts.append(normalize_spoken_text(line))
 
             notes = ""
             if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
-                notes = slide.notes_slide.notes_text_frame.text.strip()
+                notes = normalize_spoken_text(slide.notes_slide.notes_text_frame.text.strip())
 
             slides_content.append({
                 "slide": len(slides_content) + 1,
@@ -76,7 +87,7 @@ def normalize_deck_content(raw_content):
         texts = item.get("text", [])
         if not isinstance(texts, list):
             texts = []
-        texts = [str(line).strip() for line in texts if str(line).strip()]
+        texts = [normalize_spoken_text(str(line).strip()) for line in texts if str(line).strip()]
 
         notes = item.get("notes", "")
         if not isinstance(notes, str):
@@ -91,7 +102,7 @@ def normalize_deck_content(raw_content):
         normalized.append({
             "slide": slide_number,
             "text": texts,
-            "notes": notes.strip(),
+            "notes": normalize_spoken_text(notes.strip()),
         })
 
     return normalized
@@ -106,7 +117,8 @@ def restore_deck_content(output_folder, deck_id, raw_content):
 
 
 def get_slide_title(slide_content):
-    return slide_content["text"][0] if slide_content.get("text") else f"Slide {slide_content['slide']}"
+    raw_title = slide_content["text"][0] if slide_content.get("text") else f"Slide {slide_content['slide']}"
+    return normalize_spoken_text(raw_title)
 
 
 def build_greeting(all_content):
