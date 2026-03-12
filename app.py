@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
 from flask import (
     Flask, request, redirect, url_for,
-    render_template, send_from_directory, jsonify,
+    render_template, send_from_directory, jsonify, Response,
 )
 from flask_socketio import SocketIO
 
@@ -32,7 +32,7 @@ import fitz  # pymupdf
 from services.chat import build_talk_response
 from services.config import log_boot_env, validate_required_env
 from services.decks import extract_slide_content, load_deck_content, save_deck_content
-from services.tts import synthesize_fish_audio
+from services.tts import stream_fish_audio, synthesize_fish_audio
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "30x-slides-secret"
@@ -331,6 +331,28 @@ def api_tts():
     except Exception as exc:
         print(f"[TTS ERROR] {exc}", flush=True)
         return jsonify({"audio": ""})
+
+
+@app.route("/api/tts/stream")
+def api_tts_stream():
+    """Fish Audio streaming proxy — progressive MP3 bytes for immediate playback."""
+    text = (request.args.get("text") or "").strip()
+    if not text:
+        return ("", 204)
+
+    try:
+        return Response(
+            stream_fish_audio(text),
+            mimetype="audio/mpeg",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Accel-Buffering": "no",
+            },
+            direct_passthrough=True,
+        )
+    except Exception as exc:
+        print(f"[TTS STREAM ERROR] {exc}", flush=True)
+        return ("", 204)
 
 
 # ============================================================

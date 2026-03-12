@@ -6,3 +6,5 @@ lxml
 python-dotenv
 gunicorn
 anthropic
+msgpack
+websocket-client

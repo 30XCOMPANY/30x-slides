@@ -655,33 +655,29 @@ async function talkToBot(text) {
 function speak(text) {
   killAudio();
   startSpeechFallback(text);
+  const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+  currentAudio = audio;
 
-  fetch('/api/tts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.audio || !conversationMode) { openMic(); return; }
-      if (speechFallback) {
-        clearTimeout(speechFallback.timer);
-        speechFallback = null;
-      }
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-      voiceState = STATE.SPEAKING;
-      updateButton();
-      const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
-      currentAudio = audio;
-      audio.onended = () => {
-        currentAudio = null;
-        if (conversationMode) openMic();
-      };
-      audio.play().catch(() => { openMic(); });
-    })
-    .catch(() => { openMic(); });
+  const activateFish = () => {
+    if (speechFallback) {
+      clearTimeout(speechFallback.timer);
+      speechFallback = null;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    voiceState = STATE.SPEAKING;
+    updateButton();
+  };
+
+  audio.oncanplay = activateFish;
+  audio.onplaying = activateFish;
+  audio.onended = () => {
+    currentAudio = null;
+    if (conversationMode) openMic();
+  };
+  audio.onerror = () => { openMic(); };
+  audio.play().catch(() => { openMic(); });
 }
 
 function startSpeechFallback(text) {

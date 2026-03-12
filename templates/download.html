@@ -252,23 +252,7 @@ async function talkToBot(text) {
 async function fetchAudio(text, voice) {
   try {
     startSpeechFallback(text);
-    const resp = await fetch(`${serverUrl}/api/tts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice }),
-    });
-    const data = await resp.json();
-    if (data.audio) {
-      if (speechFallback) {
-        clearTimeout(speechFallback.timer);
-        speechFallback = null;
-      }
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-      playAudio(data.audio);
-    }
-    else setTimeout(hideSubtitle, 3000);
+    playStreamAudio(`${serverUrl}/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
   } catch (e) {
     setTimeout(hideSubtitle, 3000);
   }
@@ -323,13 +307,28 @@ function stopMic() {
   document.getElementById('micLabel').textContent = 'Talk';
 }
 
-function playAudio(b64) {
+function playStreamAudio(url) {
   stopAudio();
-  const audio = new Audio('data:audio/mpeg;base64,' + b64);
+  const audio = new Audio(url);
   currentAudio = audio;
+  const activateFish = () => {
+    if (speechFallback) {
+      clearTimeout(speechFallback.timer);
+      speechFallback = null;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  };
+  audio.oncanplay = activateFish;
+  audio.onplaying = activateFish;
   audio.onended = () => {
     currentAudio = null;
     setTimeout(() => { if (!currentAudio) hideSubtitle(); }, 2000);
+  };
+  audio.onerror = () => {
+    currentAudio = null;
+    setTimeout(hideSubtitle, 3000);
   };
   audio.play().catch(() => {});
 }
