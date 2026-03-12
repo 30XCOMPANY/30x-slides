@@ -60,9 +60,7 @@ print(
     f"[BOOT] cwd={os.getcwd()} file_dir={Path(__file__).parent} "
     f"ANTHROPIC_API_KEY={_env_flag('ANTHROPIC_API_KEY')} "
     f"FISH_AUDIO_API_KEY={_env_flag('FISH_AUDIO_API_KEY')} "
-    f"FISH_AUDIO_REFERENCE_ID={_env_flag('FISH_AUDIO_REFERENCE_ID')} "
-    f"ELEVENLABS_API_KEY={_env_flag('ELEVENLABS_API_KEY')} "
-    f"ELEVENLABS_VOICE_ID={_env_flag('ELEVENLABS_VOICE_ID')}",
+    f"FISH_AUDIO_REFERENCE_ID={_env_flag('FISH_AUDIO_REFERENCE_ID')}",
     flush=True,
 )
 
@@ -86,12 +84,6 @@ _validate_required_env()
 
 def get_anthropic_key():
     return _clean_env_value(os.environ.get("ANTHROPIC_API_KEY", ""))
-
-def get_elevenlabs_key():
-    return _clean_env_value(os.environ.get("ELEVENLABS_API_KEY", ""))
-
-def get_elevenlabs_voice():
-    return _clean_env_value(os.environ.get("ELEVENLABS_VOICE_ID", "HY09gbZLEpQrUZjrJgJv"))
 
 def get_fish_audio_key():
     return _clean_env_value(os.environ.get("FISH_AUDIO_API_KEY", ""))
