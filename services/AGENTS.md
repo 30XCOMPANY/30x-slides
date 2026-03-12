@@ -4,7 +4,7 @@
 成员清单
 config.py: 环境变量清洗、必填校验、provider 配置常量，[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 decks.py: deck 内容读写、viewer payload 恢复、标题与 prompt 上下文构建，[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
-chat.py: Anthropic 对话、session history、导航解析、回复裁剪，[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+chat.py: MiniMax Anthropic-compatible 对话、session history、导航解析、回复裁剪，[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 tts.py: Fish Audio TTS 调用与 base64 音频封装，[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 __init__.py: services 包声明，[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 

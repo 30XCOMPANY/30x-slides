@@ -9,8 +9,9 @@ import os
 import re
 from pathlib import Path
 
-ANTHROPIC_MODEL = "claude-haiku-4-5"
-REQUIRED_ENV_VARS = ("ANTHROPIC_API_KEY", "FISH_AUDIO_API_KEY")
+LLM_MODEL = "MiniMax-M2.5-highspeed"
+MINIMAX_BASE_URL = "https://api.minimax.io/anthropic"
+REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "FISH_AUDIO_API_KEY")
 
 
 def clean_env_value(value):
@@ -24,7 +25,7 @@ def env_flag(name):
 def log_boot_env():
     print(
         f"[BOOT] cwd={os.getcwd()} file_dir={Path(__file__).resolve().parent.parent} "
-        f"ANTHROPIC_API_KEY={env_flag('ANTHROPIC_API_KEY')} "
+        f"MINIMAX_API_KEY={env_flag('MINIMAX_API_KEY')} "
         f"FISH_AUDIO_API_KEY={env_flag('FISH_AUDIO_API_KEY')} "
         f"FISH_AUDIO_REFERENCE_ID={env_flag('FISH_AUDIO_REFERENCE_ID')}",
         flush=True,
@@ -41,8 +42,12 @@ def validate_required_env():
         )
 
 
-def get_anthropic_key():
-    return clean_env_value(os.environ.get("ANTHROPIC_API_KEY", ""))
+def get_minimax_key():
+    return clean_env_value(os.environ.get("MINIMAX_API_KEY", ""))
+
+
+def get_minimax_base_url():
+    return (os.environ.get("MINIMAX_BASE_URL", MINIMAX_BASE_URL) or MINIMAX_BASE_URL).strip()
 
 
 def get_fish_audio_key():

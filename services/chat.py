@@ -1,5 +1,5 @@
 """
-[INPUT]: 依赖 anthropic SDK、services.config 的 provider 配置、services.decks 的 deck 上下文函数
+[INPUT]: 依赖 anthropic SDK 兼容 MiniMax、services.config 的 provider 配置、services.decks 的 deck 上下文函数
 [OUTPUT]: 对外提供 talk 请求处理、流式事件输出、session history 管理、回复裁剪与导航解析
 [POS]: services 的对话层，被 app.py 的 /api/talk 路由消费
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
@@ -10,7 +10,7 @@ import re
 
 from anthropic import Anthropic
 
-from services.config import ANTHROPIC_MODEL, get_anthropic_key
+from services.config import LLM_MODEL, get_minimax_base_url, get_minimax_key
 from services.decks import (
     build_greeting,
     interactive_follow_up,
@@ -36,10 +36,18 @@ LOCAL_FAST_PATTERNS = (
 )
 
 
+def build_llm_client(timeout):
+    return Anthropic(
+        api_key=get_minimax_key(),
+        base_url=get_minimax_base_url(),
+        timeout=timeout,
+    )
+
+
 def chat_with_llm(system_prompt, messages):
-    client = Anthropic(api_key=get_anthropic_key(), timeout=6.0)
+    client = build_llm_client(timeout=6.0)
     response = client.messages.create(
-        model=ANTHROPIC_MODEL,
+        model=LLM_MODEL,
         max_tokens=48,
         system=system_prompt,
         messages=messages,
@@ -55,16 +63,16 @@ def chat_with_llm(system_prompt, messages):
         content = "I'm not sure how to respond to that."
 
     print(
-        f"[LLM] model={ANTHROPIC_MODEL} content_present={bool(content)} len={len(content)}",
+        f"[LLM] model={LLM_MODEL} content_present={bool(content)} len={len(content)}",
         flush=True,
     )
     return content
 
 
 def stream_chat_with_llm(system_prompt, messages):
-    client = Anthropic(api_key=get_anthropic_key(), timeout=20.0)
+    client = build_llm_client(timeout=20.0)
     with client.messages.stream(
-        model=ANTHROPIC_MODEL,
+        model=LLM_MODEL,
         max_tokens=96,
         system=system_prompt,
         messages=messages,

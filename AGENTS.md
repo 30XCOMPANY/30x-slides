@@ -1,5 +1,5 @@
 # 30x-slides - PPTX 转交互式讲解页
-Flask + LibreOffice + PyMuPDF + python-pptx + Anthropic + Fish Audio
+Flask + LibreOffice + PyMuPDF + python-pptx + MiniMax + Fish Audio
 
 <directory>
 services/ - provider 配置、deck 状态、对话与 TTS 服务层（5 文件: config.py, decks.py, chat.py, tts.py, __init__.py）
