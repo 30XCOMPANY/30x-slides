@@ -12,6 +12,7 @@ from anthropic import Anthropic
 from services.config import ANTHROPIC_MODEL, get_anthropic_key
 from services.decks import (
     build_greeting,
+    build_local_slide_reply,
     build_system_prompt,
     extract_slide_content,
     load_deck_content,
@@ -141,7 +142,7 @@ def build_talk_response(deck_id, payload, output_folder):
             print(f"[LLM] {raw_reply[:120]}", flush=True)
         except Exception as exc:
             print(f"[LLM ERROR] {exc}", flush=True)
-            raw_reply = "Sorry, let me try again."
+            raw_reply = build_local_slide_reply(all_content, slide_idx, text)
 
     spoken_reply, nav_command = parse_nav_command(raw_reply)
     spoken_reply = trim_spoken_reply(spoken_reply)

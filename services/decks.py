@@ -136,6 +136,27 @@ def build_greeting(all_content):
     return f"Alright, we can move through {theme_text}. I can take you straight to what matters most. Where do you wanna start?"
 
 
+def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
+    """Fallback explanation when the hosted LLM is unavailable."""
+    if not all_content:
+        return "I can keep going, but I need the slide content loaded first."
+
+    if current_slide_idx < 0 or current_slide_idx >= len(all_content):
+        current_slide_idx = 0
+
+    slide_content = all_content[current_slide_idx]
+    title = get_slide_title(slide_content)
+    body_lines = [line for line in slide_content.get("text", []) if line.strip()]
+    body_lines = body_lines[1:4] if len(body_lines) > 1 else body_lines[:3]
+
+    if not body_lines:
+        return f"This part is about {title}. Ask me to jump to another topic if you want."
+
+    snippet = "; ".join(body_lines)
+    reply = f"This part is about {title}: {snippet}."
+    return reply[:220].rstrip(" ,;:-") + ("." if not reply.endswith(".") else "")
+
+
 def build_system_prompt(all_content, current_slide_idx):
     title_index = ""
     for slide_content in all_content:
