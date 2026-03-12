@@ -58,7 +58,7 @@ def _env_flag(name):
 
 print(
     f"[BOOT] cwd={os.getcwd()} file_dir={Path(__file__).parent} "
-    f"MINIMAX_API_KEY={_env_flag('MINIMAX_API_KEY')} "
+    f"ANTHROPIC_API_KEY={_env_flag('ANTHROPIC_API_KEY')} "
     f"FISH_AUDIO_API_KEY={_env_flag('FISH_AUDIO_API_KEY')} "
     f"FISH_AUDIO_REFERENCE_ID={_env_flag('FISH_AUDIO_REFERENCE_ID')} "
     f"ELEVENLABS_API_KEY={_env_flag('ELEVENLABS_API_KEY')} "
@@ -68,12 +68,8 @@ print(
 
 
 # ---- API Keys (运行时读取，兼容 Railway 注入) ----
-MINIMAX_MODEL = "MiniMax-M2.5-highspeed"
-MINIMAX_ANTHROPIC_BASE_URLS = (
-    "https://api.minimax.io/anthropic",
-    "https://api.minimaxi.com/anthropic",
-)
-REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "FISH_AUDIO_API_KEY")
+ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
+REQUIRED_ENV_VARS = ("ANTHROPIC_API_KEY", "FISH_AUDIO_API_KEY")
 
 
 def _validate_required_env():
@@ -88,8 +84,8 @@ def _validate_required_env():
 
 _validate_required_env()
 
-def get_minimax_key():
-    return _clean_env_value(os.environ.get("MINIMAX_API_KEY", ""))
+def get_anthropic_key():
+    return _clean_env_value(os.environ.get("ANTHROPIC_API_KEY", ""))
 
 def get_elevenlabs_key():
     return _clean_env_value(os.environ.get("ELEVENLABS_API_KEY", ""))
@@ -367,40 +363,30 @@ def apply_font_replacements(pptx_path, replacements, weight_map=None):
 
 
 # ============================================================
-# LLM — MiniMax (OpenAI 兼容)
+# LLM — Anthropic
 # ============================================================
 def chat_with_llm(system_prompt, messages):
-    """Call MiniMax through the official Anthropic-compatible API."""
+    """Call Anthropic with the official SDK."""
     from anthropic import Anthropic
 
-    last_error = None
+    client = Anthropic(api_key=get_anthropic_key())
+    response = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=80,
+        system=system_prompt,
+        messages=messages,
+    )
 
-    for base_url in MINIMAX_ANTHROPIC_BASE_URLS:
-        try:
-            client = Anthropic(api_key=get_minimax_key(), base_url=base_url)
-            response = client.messages.create(
-                model=MINIMAX_MODEL,
-                max_tokens=80,
-                system=system_prompt,
-                messages=messages,
-            )
-            print(f"[LLM] endpoint_ok={base_url}", flush=True)
-
-            text_blocks = [
-                block.text
-                for block in response.content
-                if getattr(block, "type", "") == "text" and getattr(block, "text", "")
-            ]
-            content = "".join(text_blocks).strip()
-            if not content:
-                content = "I'm not sure how to respond to that."
-            print(f"[LLM] content present: {bool(content)}, len={len(content)}", flush=True)
-            return content
-        except Exception as e:
-            print(f"[LLM REQUEST ERROR] base_url={base_url} error={e}", flush=True)
-            last_error = e
-
-    raise last_error or RuntimeError("MiniMax request failed with no response")
+    text_blocks = [
+        block.text
+        for block in response.content
+        if getattr(block, "type", "") == "text" and getattr(block, "text", "")
+    ]
+    content = "".join(text_blocks).strip()
+    if not content:
+        content = "I'm not sure how to respond to that."
+    print(f"[LLM] model={ANTHROPIC_MODEL} content_present={bool(content)} len={len(content)}", flush=True)
+    return content
 
 
 
