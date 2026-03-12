@@ -48,15 +48,15 @@ def chat_with_llm(system_prompt, messages):
     return content
 
 
-def trim_spoken_reply(reply, max_chars=170, max_words=26):
+def trim_spoken_reply(reply, max_chars=220, max_words=36):
     reply = re.sub(r"\s+", " ", (reply or "")).strip()
     if not reply:
         return ""
 
     sentences = re.split(r"(?<=[.!?])\s+", reply)
-    first_two = " ".join(sentences[:2]).strip()
-    if first_two and len(first_two) <= max_chars:
-        return first_two
+    first_three = " ".join(sentences[:3]).strip()
+    if first_three and len(first_three) <= max_chars:
+        return first_three
 
     words = reply.split()
     if len(words) > max_words:
