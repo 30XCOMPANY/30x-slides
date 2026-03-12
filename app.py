@@ -408,6 +408,35 @@ def get_slide_title(sc):
     return sc["text"][0] if sc.get("text") else f"Slide {sc['slide']}"
 
 
+def build_greeting(all_content):
+    """Build a deterministic greeting so first contact never depends on LLM health."""
+    ignored = {"title slide", "thank you", "questions", "end", ""}
+    titles = []
+    seen = set()
+
+    for sc in all_content:
+        title = get_slide_title(sc).strip()
+        normalized = title.lower()
+        if normalized in ignored or normalized in seen:
+            continue
+        seen.add(normalized)
+        titles.append(title)
+
+    if not titles:
+        return "I can walk you through the key ideas here. Where do you wanna start?"
+
+    themes = titles[:5]
+    if len(themes) == 1:
+        return f"We can dig into {themes[0]}. Where do you wanna start?"
+
+    if len(themes) == 2:
+        theme_text = f"{themes[0]} and {themes[1]}"
+    else:
+        theme_text = ", ".join(themes[:-1]) + f", and {themes[-1]}"
+
+    return f"We can dig into {theme_text}. Where do you wanna start?"
+
+
 def build_system_prompt(all_content, current_slide_idx):
     """构建 system prompt: 标题索引 + 当前 slide 详情"""
 
@@ -512,21 +541,30 @@ def api_talk(deck_id):
     if history_key not in _chat_histories:
         _chat_histories[history_key] = []
     history = _chat_histories[history_key]
+    is_internal = text.startswith("[")
 
     if len(history) > 40:
         history = history[-40:]
         _chat_histories[history_key] = history
 
-    history.append({"role": "user", "content": text})
+    if not is_internal:
+        history.append({"role": "user", "content": text})
+
     messages = [{"role": "system", "content": system_prompt}] + history
+    if is_internal and text != "[GREET]":
+        messages.append({"role": "user", "content": text})
 
     # ---- LLM ----
-    try:
-        reply = chat_with_llm(messages)
-        print(f"[LLM] {reply[:120]}", flush=True)
-    except Exception as e:
-        print(f"[LLM ERROR] {e}", flush=True)
-        reply = "Sorry, let me try again."
+    if text == "[GREET]":
+        reply = build_greeting(all_content)
+        print(f"[GREET] {reply}", flush=True)
+    else:
+        try:
+            reply = chat_with_llm(messages)
+            print(f"[LLM] {reply[:120]}", flush=True)
+        except Exception as e:
+            print(f"[LLM ERROR] {e}", flush=True)
+            reply = "Sorry, let me try again."
 
     history.append({"role": "assistant", "content": reply})
 
