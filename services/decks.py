@@ -11,6 +11,10 @@ import re
 
 
 IGNORED_TITLES = {"title slide", "thank you", "questions", "end", ""}
+GENERIC_THEME_TITLES = {
+    "problem", "solution", "roi", "results", "summary", "overview", "agenda",
+    "intro", "introduction", "closing", "next steps", "appendix", "why now",
+}
 STOPWORDS = {
     "the", "and", "for", "with", "from", "that", "this", "into", "about", "your",
     "have", "will", "what", "when", "where", "which", "their", "there", "here",
@@ -150,6 +154,18 @@ def meaningful_tokens(text):
     ]
 
 
+def is_weak_theme_phrase(phrase):
+    normalized = normalize_spoken_text(phrase)
+    lowered = normalized.lower()
+    if lowered in IGNORED_TITLES or lowered in GENERIC_THEME_TITLES:
+        return True
+    if re.search(r"\b20\d{2}\b", lowered):
+        return True
+    if len(meaningful_tokens(lowered)) <= 1:
+        return True
+    return False
+
+
 def extract_theme_phrases(all_content, limit=4):
     scores = {}
     ordered = []
@@ -163,14 +179,14 @@ def extract_theme_phrases(all_content, limit=4):
 
         for phrase in title_phrases[:2] + body_phrases[:2]:
             normalized = phrase.lower()
-            if normalized in IGNORED_TITLES or len(normalized) < 3:
+            if len(normalized) < 3 or is_weak_theme_phrase(phrase):
                 continue
             if normalized not in scores:
                 ordered.append(normalized)
                 scores[normalized] = {"phrase": phrase, "score": 0}
-            weight = 3 if idx == 0 else 2
+            weight = 4 if idx == 0 else 2
             if phrase in body_phrases:
-                weight = 1
+                weight = 3
             scores[normalized]["score"] += weight
 
     ranked = sorted(ordered, key=lambda key: (-scores[key]["score"], ordered.index(key)))
@@ -265,12 +281,22 @@ def infer_navigation_target(user_text, all_content, current_slide_idx):
     best_score = 0
     current_slide_number = current_slide_idx + 1
     for candidate in nav_index:
+        phrase_match = False
+        candidate_phrases = [candidate["title"]] + candidate["summary"]["concepts"] + candidate["summary"]["body_lines"][:2]
+        for phrase in candidate_phrases:
+            lowered = normalize_spoken_text(phrase).lower()
+            if lowered and lowered in normalized:
+                phrase_match = True
+                break
+
         overlap = len(candidate["keywords"].intersection(query_tokens))
-        if overlap <= 0:
+        if overlap <= 0 and not phrase_match:
             continue
         score = overlap * 3
+        if phrase_match:
+            score += 5
         if candidate["slide"] == current_slide_number:
-            score += 1
+            score -= 1
         title_tokens = set(meaningful_tokens(candidate["title"]))
         if title_tokens.intersection(query_tokens):
             score += 2
@@ -278,7 +304,7 @@ def infer_navigation_target(user_text, all_content, current_slide_idx):
             best_score = score
             best_slide = candidate["slide"]
 
-    return str(best_slide) if best_slide and best_score >= 3 else None
+    return str(best_slide) if best_slide and best_score >= 5 and best_slide != current_slide_number else None
 
 
 def build_greeting(all_content):
@@ -288,7 +314,7 @@ def build_greeting(all_content):
     theme_text = join_phrases(themes)
 
     return (
-        f"Hey, good to have you here. This deck breaks down {theme_text}. "
+        f"Hey, good to have you here. This deck is really about {theme_text}. "
         "I can give you the big picture, zoom into one section, or walk it slide by slide. "
         "What do you want to understand first?"
     )

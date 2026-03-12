@@ -438,7 +438,6 @@ let currentAudio = null;
 let recognition = null;
 let isBusy = false;
 let hasGreeted = false;
-let speechFallback = null;
 let activeTalkController = null;
 let speechQueue = [];
 let streamDone = false;
@@ -676,28 +675,6 @@ async function talkToBot(text) {
   }
 }
 
-function startSpeechFallback(text) {
-  if (!('speechSynthesis' in window) || !text) return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.03;
-  utterance.pitch = 1.0;
-  utterance.lang = 'en-US';
-
-  const timer = setTimeout(() => {
-    if (!conversationMode) return;
-    voiceState = STATE.SPEAKING;
-    updateButton();
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  }, 120);
-
-  utterance.onend = () => {
-    if (conversationMode) openMic();
-  };
-
-  speechFallback = { timer, utterance };
-}
-
 function killAudio() {
   if (activeTalkController) {
     activeTalkController.abort();
@@ -709,13 +686,6 @@ function killAudio() {
     currentAudio = null;
   }
   speechQueue = [];
-  if (speechFallback) {
-    clearTimeout(speechFallback.timer);
-    speechFallback = null;
-  }
-  if (window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-  }
 }
 
 function applyNav(nav) {
@@ -749,18 +719,10 @@ function playNextQueuedSentence() {
   }
 
   const text = speechQueue.shift();
-  startSpeechFallback(text);
   const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
   currentAudio = audio;
 
   const activateFish = () => {
-    if (speechFallback) {
-      clearTimeout(speechFallback.timer);
-      speechFallback = null;
-    }
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
     voiceState = STATE.SPEAKING;
     updateButton();
   };

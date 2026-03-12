@@ -282,6 +282,7 @@ def build_talk_response(deck_id, payload, output_folder):
     inferred_nav = ctx["inferred_nav"]
     history = ctx["history"]
     messages = ctx["messages"]
+    system_prompt = build_system_prompt(all_content, slide_idx)
 
     if text == "[GREET]":
         raw_reply = build_greeting(all_content)
