@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>30X Slides</title>
+<link rel="preload" href="/static/hero-bg.mp4" as="video" type="video/mp4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -63,7 +64,11 @@
     inset: 0;
     z-index: 0;
     overflow: hidden;
-    background: #17161c;
+    background:
+      radial-gradient(42% 38% at 18% 18%, rgba(246, 221, 213, 0.26), transparent 72%),
+      radial-gradient(36% 32% at 82% 20%, rgba(183, 198, 255, 0.2), transparent 74%),
+      radial-gradient(34% 30% at 50% 78%, rgba(71, 173, 232, 0.14), transparent 76%),
+      linear-gradient(180deg, #30283c 0%, #17161c 54%, #111018 100%);
   }
   .hero-video {
     position: absolute;
@@ -72,9 +77,10 @@
     height: 100%;
     object-fit: cover;
     filter: saturate(0.92) contrast(0.95) brightness(1.02);
-    opacity: 0;
-    transition: opacity 0.6s ease;
+    opacity: 1;
+    transition: opacity 0.2s ease;
   }
+  .hero-video:not(.loaded) { opacity: 0.34; }
   .hero-video.loaded { opacity: 1; }
 
   /* 视频上层叠加 — 复刻 hero-video-overlay 多层渐变 */
