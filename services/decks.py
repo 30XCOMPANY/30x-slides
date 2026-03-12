@@ -11,6 +11,12 @@ import re
 
 
 IGNORED_TITLES = {"title slide", "thank you", "questions", "end", ""}
+STOPWORDS = {
+    "the", "and", "for", "with", "from", "that", "this", "into", "about", "your",
+    "have", "will", "what", "when", "where", "which", "their", "there", "here",
+    "slide", "deck", "overview", "summary", "introduction", "intro", "section",
+    "part", "more", "than", "into", "onto", "over", "under", "main", "topic",
+}
 
 
 def normalize_spoken_text(text):
@@ -121,37 +127,156 @@ def get_slide_title(slide_content):
     return normalize_spoken_text(raw_title)
 
 
-def build_greeting(all_content):
-    titles = []
+def split_phrases(text):
+    cleaned = normalize_spoken_text(text)
+    if not cleaned:
+        return []
+    parts = re.split(r"[,:;()\-]\s*|\s+and\s+|\s+vs\.?\s+|\s+to\s+", cleaned)
+    return [part.strip() for part in parts if len(part.strip()) >= 3]
+
+
+def meaningful_tokens(text):
+    return [
+        token
+        for token in re.findall(r"[a-z0-9]+", normalize_spoken_text(text).lower())
+        if len(token) >= 3 and token not in STOPWORDS
+    ]
+
+
+def extract_theme_phrases(all_content, limit=4):
+    scores = {}
+    ordered = []
+
+    for idx, slide_content in enumerate(all_content):
+        title = get_slide_title(slide_content)
+        title_phrases = split_phrases(title) or ([title] if title else [])
+        body_phrases = []
+        for line in slide_content.get("text", [])[1:4]:
+            body_phrases.extend(split_phrases(line)[:1])
+
+        for phrase in title_phrases[:2] + body_phrases[:2]:
+            normalized = phrase.lower()
+            if normalized in IGNORED_TITLES or len(normalized) < 3:
+                continue
+            if normalized not in scores:
+                ordered.append(normalized)
+                scores[normalized] = {"phrase": phrase, "score": 0}
+            weight = 3 if idx == 0 else 2
+            if phrase in body_phrases:
+                weight = 1
+            scores[normalized]["score"] += weight
+
+    ranked = sorted(ordered, key=lambda key: (-scores[key]["score"], ordered.index(key)))
+    return [scores[key]["phrase"] for key in ranked[:limit]]
+
+
+def join_phrases(phrases):
+    if not phrases:
+        return ""
+    if len(phrases) == 1:
+        return phrases[0]
+    if len(phrases) == 2:
+        return f"{phrases[0]} and {phrases[1]}"
+    return ", ".join(phrases[:-1]) + f", and {phrases[-1]}"
+
+
+def summarize_slide_core(slide_content):
+    title = get_slide_title(slide_content)
+    body_lines = [line for line in slide_content.get("text", []) if line.strip()]
+    detail_lines = body_lines[1:5] if len(body_lines) > 1 else body_lines[:4]
+
+    concept_phrases = []
     seen = set()
+    for line in detail_lines:
+        for phrase in split_phrases(line)[:2]:
+            normalized = phrase.lower()
+            if normalized == title.lower() or normalized in seen:
+                continue
+            seen.add(normalized)
+            concept_phrases.append(phrase)
+            if len(concept_phrases) >= 3:
+                break
+        if len(concept_phrases) >= 3:
+            break
 
+    return {
+        "title": title,
+        "concepts": concept_phrases,
+        "body_lines": detail_lines,
+    }
+
+
+def build_navigation_index(all_content):
+    index = []
     for slide_content in all_content:
-        title = get_slide_title(slide_content).strip()
-        normalized = title.lower()
-        if normalized in IGNORED_TITLES or normalized in seen:
+        title = get_slide_title(slide_content)
+        summary = summarize_slide_core(slide_content)
+        phrases = [title] + summary["concepts"]
+        body_lines = summary["body_lines"]
+        if body_lines:
+            phrases.extend(body_lines[:2])
+
+        keywords = set()
+        for phrase in phrases:
+            keywords.update(meaningful_tokens(phrase))
+
+        index.append({
+            "slide": slide_content["slide"],
+            "title": title,
+            "keywords": keywords,
+            "summary": summary,
+        })
+    return index
+
+
+def infer_navigation_target(user_text, all_content, current_slide_idx):
+    normalized = normalize_spoken_text(user_text).lower()
+    if not normalized:
+        return None
+
+    if "next slide" in normalized or normalized in {"next", "next one", "move on"}:
+        return "next"
+    if "previous slide" in normalized or "go back" in normalized or normalized in {"back", "previous", "prev"}:
+        return "prev"
+
+    requested_number = re.search(r"\bslide\s+(\d{1,2})\b", normalized)
+    if requested_number:
+        return requested_number.group(1)
+
+    nav_index = build_navigation_index(all_content)
+    query_tokens = meaningful_tokens(normalized)
+    if not query_tokens:
+        return None
+
+    best_slide = None
+    best_score = 0
+    current_slide_number = current_slide_idx + 1
+    for candidate in nav_index:
+        overlap = len(candidate["keywords"].intersection(query_tokens))
+        if overlap <= 0:
             continue
-        seen.add(normalized)
-        titles.append(title)
+        score = overlap * 3
+        if candidate["slide"] == current_slide_number:
+            score += 1
+        title_tokens = set(meaningful_tokens(candidate["title"]))
+        if title_tokens.intersection(query_tokens):
+            score += 2
+        if score > best_score:
+            best_score = score
+            best_slide = candidate["slide"]
 
-    if not titles:
+    return str(best_slide) if best_slide and best_score >= 3 else None
+
+
+def build_greeting(all_content):
+    themes = extract_theme_phrases(all_content)
+    if not themes:
         return "Hey, good to have you here. I can give you the big-picture summary first and then walk through the details. What do you want to understand first?"
-
-    themes = titles[:4]
-    if len(themes) == 1:
-        return (
-            f"Hey, good to have you here. This deck mainly covers {themes[0]}. "
-            "I can break down the main idea and then go deeper wherever you want. "
-            "What do you want to understand first?"
-        )
-
-    if len(themes) == 2:
-        theme_text = f"{themes[0]} and {themes[1]}"
-    else:
-        theme_text = ", ".join(themes[:-1]) + f", and {themes[-1]}"
+    theme_text = join_phrases(themes)
 
     return (
-        f"Hey, good to have you here. This deck is mainly about {theme_text}. "
-        "I can give you the big picture first or jump into any section you want. "
+        f"Hey, good to have you here. This deck breaks down {theme_text}. "
+        "I can give you the big picture, zoom into one section, or walk it slide by slide. "
         "What do you want to understand first?"
     )
 
@@ -170,36 +295,39 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
         current_slide_idx = 0
 
     slide_content = all_content[current_slide_idx]
-    title = get_slide_title(slide_content)
-    body_lines = [line for line in slide_content.get("text", []) if line.strip()]
-    body_lines = body_lines[1:4] if len(body_lines) > 1 else body_lines[:3]
+    summary = summarize_slide_core(slide_content)
+    title = summary["title"]
+    concepts = summary["concepts"]
+    body_lines = summary["body_lines"]
 
     if not body_lines:
         return (
             f"This part is about {title}. "
-            "It looks like the slide is setting up the main idea more than giving detail. "
-            "I can still help you frame what matters here. "
+            "It is setting up the main idea more than listing detailed evidence. "
+            "So the useful read here is the direction it is pointing you toward. "
             "Do you want the short version, the key takeaway, or the next slide?"
         )
 
+    concept_text = join_phrases(concepts[:3])
     first = body_lines[0]
-    second = body_lines[1] if len(body_lines) > 1 else ""
-    third = body_lines[2] if len(body_lines) > 2 else ""
+    sentences = [f"This part is really about {title}."]
+    if concept_text:
+        sentences.append(f"The core idea is how {concept_text} connect in one story.")
+    else:
+        sentences.append(f"The core idea is {first}.")
 
-    sentences = [
-        f"This part is about {title}.",
-        f"The main point here is {first}.",
-    ]
-    if second:
-        sentences.append(f"It also highlights {second}.")
-    elif third:
-        sentences.append(f"It also points toward {third}.")
+    if len(body_lines) > 1:
+        sentences.append(
+            f"What matters most is not each bullet by itself, but the pattern between {body_lines[0]} and {body_lines[1]}."
+        )
     else:
-        sentences.append("So the slide is really framing the core takeaway.")
-    if third and second:
-        sentences.append(f"The extra context is {third}.")
+        sentences.append("So the slide is trying to give you one clear takeaway, not just a list to read aloud.")
+
+    if len(body_lines) > 2:
+        sentences.append(f"The extra detail here is {body_lines[2]}, which gives the main point more weight.")
     else:
-        sentences.append("That gives you the core idea without overcomplicating it.")
+        sentences.append("That is the practical read of this slide once you strip away the presentation wording.")
+
     sentences.append("Do you want the short version, the deeper takeaway, or the next slide?")
     return " ".join(sentences[:5])
 
@@ -234,11 +362,13 @@ def build_system_prompt(all_content, current_slide_idx):
     nav_examples += '- User says "next" → you write [GO:next]\n'
     nav_examples += '- User says "go back" → you write [GO:prev]\n'
 
-    return f"""You explain slide content directly. Talk about the topic itself, not "the deck" or "this slide".
+    return f"""You explain slide content like a sharp human presenter. Talk about the idea underneath the slide, not the slide wording itself.
 
 Spoken voice only. No markdown, no bullets, no lists.
 
 VIBE: Casual, warm, and tutor-like. Sound like a smart human guide, not a narrator.
+
+NEVER read bullets line by line. Synthesize. Compress. Explain what the slide is trying to say and why it matters.
 
 [GREET]: EXACT STRUCTURE: first greet the user naturally, then summarize the deck in plain language with 2-4 major themes, then ask what they want to understand first. End with a question like "What do you want to understand first?" Do NOT include [GO:N].
 

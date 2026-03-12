@@ -15,6 +15,7 @@ from services.decks import (
     build_local_slide_reply,
     build_system_prompt,
     extract_slide_content,
+    infer_navigation_target,
     load_deck_content,
     restore_deck_content,
     save_deck_content,
@@ -105,6 +106,11 @@ def parse_nav_command(reply):
     return spoken, nav_command
 
 
+def should_use_local_explainer(text):
+    normalized_text = (text or "").lower()
+    return any(pattern in normalized_text for pattern in LOCAL_FAST_PATTERNS)
+
+
 def ensure_deck_content(output_folder, deck_id, payload):
     all_content = load_deck_content(output_folder, deck_id)
     if all_content:
@@ -138,6 +144,7 @@ def build_talk_response(deck_id, payload, output_folder):
     all_content = ensure_deck_content(output_folder, deck_id, payload)
     system_prompt = build_system_prompt(all_content, slide_idx)
     normalized_text = text.lower()
+    inferred_nav = infer_navigation_target(text, all_content, slide_idx)
 
     history_key = f"{deck_id}:{session_id}"
     history = _chat_histories.setdefault(history_key, [])
@@ -160,7 +167,7 @@ def build_talk_response(deck_id, payload, output_folder):
     elif normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
         raw_reply = build_greeting(all_content)
         print(f"[SMALLTALK LOCAL] {raw_reply}", flush=True)
-    elif any(pattern in normalized_text for pattern in LOCAL_FAST_PATTERNS):
+    elif should_use_local_explainer(text):
         raw_reply = build_local_slide_reply(all_content, slide_idx, text)
         print(f"[LOCAL FAST] {raw_reply[:120]}", flush=True)
     else:
@@ -172,6 +179,8 @@ def build_talk_response(deck_id, payload, output_folder):
             raw_reply = build_local_slide_reply(all_content, slide_idx, text)
 
     spoken_reply, nav_command = parse_nav_command(raw_reply)
+    if inferred_nav and not nav_command:
+        nav_command = inferred_nav
     spoken_reply = trim_spoken_reply(spoken_reply)
     print(f"[LLM TRIMMED] len={len(spoken_reply)} text={spoken_reply[:120]}", flush=True)
 
