@@ -29,7 +29,7 @@ from flask import (
 from flask_socketio import SocketIO
 
 import fitz  # pymupdf
-from services.chat import build_talk_response, stream_talk_response
+from services.chat import build_talk_response, stream_talk_response, pregenerate_greeting
 from services.config import log_boot_env, validate_required_env
 from services.decks import build_greeting, extract_slide_content, load_deck_content, save_deck_content
 from services.tts import stream_fish_audio, synthesize_fish_audio
@@ -254,21 +254,25 @@ def render_pdf_pages(pdf_path):
 
 def convert_deck(deck_dir):
     pptx_path = os.path.join(deck_dir, "deck.pptx")
+    deck_id = os.path.basename(deck_dir)
     started_at = time.perf_counter()
     pdf_path = convert_pptx_to_pdf(pptx_path, deck_dir)
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         raster_future = executor.submit(render_pdf_pages, pdf_path)
         content_future = executor.submit(extract_slide_content, pptx_path)
         total = raster_future.result()
         content = content_future.result()
 
+        # 渲染完成后, 立刻并行预生成 greeting (用户打开 viewer 时直接用)
+        executor.submit(pregenerate_greeting, deck_id, content)
+
     with open(os.path.join(deck_dir, "meta.txt"), "w") as f:
         f.write(str(total))
-    save_deck_content(app.config["OUTPUT_FOLDER"], os.path.basename(deck_dir), content)
+    save_deck_content(app.config["OUTPUT_FOLDER"], deck_id, content)
 
     elapsed = time.perf_counter() - started_at
-    print(f"[CONVERT] deck={os.path.basename(deck_dir)} slides={total} elapsed={elapsed:.2f}s", flush=True)
+    print(f"[CONVERT] deck={deck_id} slides={total} elapsed={elapsed:.2f}s", flush=True)
     return total
 
 
@@ -392,13 +396,18 @@ def upload():
     file.save(pptx_path)
 
     try:
-        font_report = ensure_fonts(pptx_path)
+        # 字体检测和转换并行 — 字体只影响 reconvert, 首次渲染不阻塞
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            font_future = executor.submit(ensure_fonts, pptx_path)
+            convert_future = executor.submit(convert_deck, deck_dir)
+            font_report = font_future.result()
+            convert_future.result()
+
         with open(os.path.join(deck_dir, "fonts.txt"), "w") as f:
             for cat in ("found", "installed", "missing"):
                 for name in font_report[cat]:
                     f.write(f"{cat}: {name}\n")
 
-        convert_deck(deck_dir)
         return redirect(url_for("viewer", deck_id=deck_id))
     except Exception as e:
         print(f"[UPLOAD ERROR] {e}", flush=True)

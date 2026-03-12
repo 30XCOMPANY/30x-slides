@@ -29,6 +29,24 @@ from services.decks import (
 )
 
 _chat_histories = {}
+_pregenerated_greetings = {}
+
+
+def pregenerate_greeting(deck_id, all_content):
+    """上传时调用, 预生成 LLM greeting, 用户点 mic 直接用"""
+    try:
+        system_prompt = build_greeting_prompt(all_content)
+        messages = [{"role": "user", "content": "[GREET]"}]
+        greeting = chat_with_llm(system_prompt, messages)
+        _pregenerated_greetings[deck_id] = greeting
+        print(f"[PREGEN] greeting ready for {deck_id}: {len(greeting)} chars", flush=True)
+    except Exception as exc:
+        print(f"[PREGEN ERROR] {exc}", flush=True)
+        _pregenerated_greetings[deck_id] = build_greeting(all_content)
+
+
+def get_pregenerated_greeting(deck_id):
+    return _pregenerated_greetings.pop(deck_id, None)
 LOCAL_FAST_PATTERNS = (
     "what is this slide about",
     "what's this slide about",
@@ -282,11 +300,15 @@ def stream_talk_response(deck_id, payload, output_folder):
         yield from stream_scripted_reply(raw_reply, inferred_nav)
         return
 
-    # [GREET] 走 LLM 生成 deck summary; 但如果 history 里已经有 assistant 消息, 说明已经 greet 过了
+    # [GREET]: 优先用预生成的, 没有才调 LLM
     if text == "[GREET]":
         if history:
-            # 已经 greet 过了 (比如用户刷新页面), 直接开 mic
             yield emit_event("done", text="", nav=None)
+            return
+        cached = get_pregenerated_greeting(deck_id)
+        if cached:
+            history.append({"role": "assistant", "content": cached})
+            yield from stream_scripted_reply(cached, None)
             return
         system_prompt = build_greeting_prompt(all_content)
         fallback_fn = lambda: build_greeting(all_content)
