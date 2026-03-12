@@ -52,6 +52,11 @@ MINIMAX_MODEL = "MiniMax-Text-01"
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "HY09gbZLEpQrUZjrJgJv")
 
+# ---- 启动校验 ----
+print(f"[BOOT] MINIMAX_API_KEY={'SET' if MINIMAX_API_KEY else 'MISSING'}", flush=True)
+print(f"[BOOT] ELEVENLABS_API_KEY={'SET' if ELEVENLABS_API_KEY else 'MISSING'}", flush=True)
+print(f"[BOOT] ELEVENLABS_VOICE_ID={ELEVENLABS_VOICE_ID}", flush=True)
+
 
 
 
