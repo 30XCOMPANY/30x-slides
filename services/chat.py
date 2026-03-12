@@ -12,6 +12,7 @@ from anthropic import Anthropic
 from services.config import ANTHROPIC_MODEL, get_anthropic_key
 from services.decks import (
     build_greeting,
+    interactive_follow_up,
     build_local_slide_reply,
     build_system_prompt,
     extract_slide_content,
@@ -62,7 +63,7 @@ def chat_with_llm(system_prompt, messages):
 def ensure_interactive_ending(reply):
     reply = (reply or "").strip()
     if not reply:
-        return "Do you want the short version, the deeper takeaway, or the next slide?"
+        return interactive_follow_up("empty", 0)
 
     interactive_markers = ("do you want", "want the", "should i", "which part", "where do you want", "how do you want")
     if any(marker in reply.lower() for marker in interactive_markers):
@@ -70,7 +71,7 @@ def ensure_interactive_ending(reply):
 
     if reply[-1] not in ".!?":
         reply += "."
-    return reply + " Do you want the short version, the deeper takeaway, or the next slide?"
+    return reply + " " + interactive_follow_up(reply, 0)
 
 
 def trim_spoken_reply(reply, max_chars=320, max_words=55):

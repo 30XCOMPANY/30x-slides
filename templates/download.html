@@ -283,7 +283,7 @@ function startSpeechFallback(text) {
   const timer = setTimeout(() => {
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
-  }, 250);
+  }, 120);
   speechFallback = { timer, utterance };
 }
 

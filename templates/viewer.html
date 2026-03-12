@@ -697,7 +697,7 @@ function startSpeechFallback(text) {
     updateButton();
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
-  }, 250);
+  }, 120);
 
   utterance.onend = () => {
     if (conversationMode) openMic();

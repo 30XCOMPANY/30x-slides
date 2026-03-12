@@ -17,6 +17,13 @@ STOPWORDS = {
     "slide", "deck", "overview", "summary", "introduction", "intro", "section",
     "part", "more", "than", "into", "onto", "over", "under", "main", "topic",
 }
+INTERACTIVE_FOLLOW_UPS = (
+    "Do you want the short version, the deeper takeaway, or the next slide?",
+    "Do you want me to unpack the main point, compare it with the last slide, or move forward?",
+    "Should I zoom into the key idea here, connect it to the bigger story, or jump ahead?",
+    "Do you want the practical takeaway, the strategy behind it, or the next section?",
+    "Want me to simplify this part, go one level deeper, or take you to the next slide?",
+)
 
 
 def normalize_spoken_text(text):
@@ -180,6 +187,12 @@ def join_phrases(phrases):
     return ", ".join(phrases[:-1]) + f", and {phrases[-1]}"
 
 
+def interactive_follow_up(seed_text="", slide_number=0):
+    seed = f"{slide_number}:{normalize_spoken_text(seed_text).lower()}"
+    index = sum(ord(ch) for ch in seed) % len(INTERACTIVE_FOLLOW_UPS)
+    return INTERACTIVE_FOLLOW_UPS[index]
+
+
 def summarize_slide_core(slide_content):
     title = get_slide_title(slide_content)
     body_lines = [line for line in slide_content.get("text", []) if line.strip()]
@@ -305,7 +318,7 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
             f"This part is about {title}. "
             "It is setting up the main idea more than listing detailed evidence. "
             "So the useful read here is the direction it is pointing you toward. "
-            "Do you want the short version, the key takeaway, or the next slide?"
+            f"{interactive_follow_up(user_text or title, slide_content['slide'])}"
         )
 
     concept_text = join_phrases(concepts[:3])
@@ -328,7 +341,7 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
     else:
         sentences.append("That is the practical read of this slide once you strip away the presentation wording.")
 
-    sentences.append("Do you want the short version, the deeper takeaway, or the next slide?")
+    sentences.append(interactive_follow_up(user_text or title, slide_content["slide"]))
     return " ".join(sentences[:5])
 
 
@@ -372,7 +385,7 @@ NEVER read bullets line by line. Synthesize. Compress. Explain what the slide is
 
 [GREET]: EXACT STRUCTURE: first greet the user naturally, then summarize the deck in plain language with 2-4 major themes, then ask what they want to understand first. End with a question like "What do you want to understand first?" Do NOT include [GO:N].
 
-REPLIES: ALWAYS 3-5 short sentences. The last sentence MUST be interactive and invite the user to choose a next move, like "Do you want the short version, the deeper takeaway, or the next slide?" Keep it natural and conversational.
+REPLIES: ALWAYS 3-5 short sentences. The last sentence MUST be interactive and invite the user to choose a next move. Vary the final question naturally. Do not reuse the exact same closing line every time.
 
 Viewer is on Slide {current_slide_idx + 1} of {len(all_content)}.
 
