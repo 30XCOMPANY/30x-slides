@@ -283,7 +283,7 @@
   <div class="actions">
     {% if font_report.missing %}
     <button class="font-badge warn" onclick="toggleFontPanel()">
-      {{ font_report.missing|length }} font{{ 's' if font_report.missing|length > 1 }} to fix
+      {{ font_report.missing|length }} font{{ 's' if font_report.missing|length > 1 }} optional fix
     </button>
     {% else %}
     <span class="font-badge ok">All fonts matched</span>
@@ -300,12 +300,13 @@
 
 <!-- ---- Font panel ---- -->
 {% if font_report.missing %}
-<div class="font-overlay show" id="fontOverlay">
+<div class="font-overlay" id="fontOverlay">
   <div class="font-panel">
     <div class="font-panel-header">
-      <div class="font-panel-title">Font Settings</div>
+      <div class="font-panel-title">Optional Font Fixes</div>
       <button class="font-panel-close" onclick="toggleFontPanel()">&times;</button>
     </div>
+    <div class="font-list-ok">Slides are already rendered. Only open this if you want closer font matching.</div>
     {% if font_report.found or font_report.installed %}
     <div class="section-label">Installed</div>
     <div class="font-list-ok">{{ (font_report.found + font_report.installed)|join(', ') }}</div>
