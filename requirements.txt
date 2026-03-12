@@ -5,6 +5,6 @@ python-pptx
 lxml
 python-dotenv
 gunicorn
-anthropic
+httpx
 msgpack
 websocket-client

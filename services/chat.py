@@ -1,5 +1,5 @@
 """
-[INPUT]: 依赖 anthropic SDK 兼容 MiniMax、services.config 的 provider 配置、services.decks 的 deck 上下文函数
+[INPUT]: 依赖 httpx 的 OpenRouter 请求、services.config 的 provider 配置、services.decks 的 deck 上下文函数
 [OUTPUT]: 对外提供 talk 请求处理、流式事件输出、session history 管理、回复裁剪与导航解析
 [POS]: services 的对话层，被 app.py 的 /api/talk 路由消费
 [PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
@@ -8,13 +8,12 @@
 import json
 import re
 
-from anthropic import Anthropic
+import httpx
 
 from services.config import (
-    LLM_FALLBACK_MODEL,
     LLM_MODEL,
-    get_minimax_base_url_candidates,
-    get_minimax_key,
+    get_openrouter_base_url,
+    get_openrouter_key,
 )
 from services.decks import (
     build_greeting,
@@ -41,78 +40,83 @@ LOCAL_FAST_PATTERNS = (
 )
 
 
-def build_llm_client(timeout, base_url):
-    return Anthropic(
-        api_key=get_minimax_key(),
-        base_url=base_url,
-        timeout=timeout,
-    )
+def build_openrouter_headers():
+    return {
+        "Authorization": f"Bearer {get_openrouter_key()}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://30x-slides-production.up.railway.app",
+        "X-Title": "30x Slides",
+    }
 
 
-def iter_models():
-    models = [LLM_MODEL]
-    if LLM_FALLBACK_MODEL and LLM_FALLBACK_MODEL != LLM_MODEL:
-        models.append(LLM_FALLBACK_MODEL)
-    return models
+def build_openrouter_messages(system_prompt, messages):
+    chat_messages = [{"role": "system", "content": system_prompt}]
+    for message in messages:
+        role = message.get("role", "user")
+        content = (message.get("content") or "").strip()
+        if content:
+            chat_messages.append({"role": role, "content": content})
+    return chat_messages
+
+
+def extract_openrouter_text(payload):
+    choices = payload.get("choices") or []
+    if not choices:
+        return ""
+    message = choices[0].get("message") or {}
+    return (message.get("content") or "").strip()
 
 
 def chat_with_llm(system_prompt, messages):
-    last_error = None
+    payload = {
+        "model": LLM_MODEL,
+        "messages": build_openrouter_messages(system_prompt, messages),
+        "max_tokens": 96,
+        "temperature": 0.5,
+    }
+    url = f"{get_openrouter_base_url()}/chat/completions"
 
-    for base_url in get_minimax_base_url_candidates():
-        client = build_llm_client(timeout=6.0, base_url=base_url)
-        for model in iter_models():
-            try:
-                response = client.messages.create(
-                    model=model,
-                    max_tokens=48,
-                    system=system_prompt,
-                    messages=messages,
-                )
-                text_blocks = [
-                    block.text
-                    for block in response.content
-                    if getattr(block, "type", "") == "text" and getattr(block, "text", "")
-                ]
-                content = "".join(text_blocks).strip()
-                if not content:
-                    content = "I'm not sure how to respond to that."
+    with httpx.Client(timeout=8.0) as client:
+        response = client.post(url, headers=build_openrouter_headers(), json=payload)
+        response.raise_for_status()
+        content = extract_openrouter_text(response.json()) or "I'm not sure how to respond to that."
 
-                print(
-                    f"[LLM] base_url={base_url} model={model} content_present={bool(content)} len={len(content)}",
-                    flush=True,
-                )
-                return content
-            except Exception as exc:
-                last_error = exc
-                print(f"[LLM RETRY] base_url={base_url} model={model} error={exc}", flush=True)
-
-    raise last_error
+    print(
+        f"[LLM] provider=openrouter model={LLM_MODEL} content_present={bool(content)} len={len(content)}",
+        flush=True,
+    )
+    return content
 
 
 def stream_chat_with_llm(system_prompt, messages):
-    last_error = None
+    payload = {
+        "model": LLM_MODEL,
+        "messages": build_openrouter_messages(system_prompt, messages),
+        "max_tokens": 128,
+        "temperature": 0.5,
+        "stream": True,
+    }
+    url = f"{get_openrouter_base_url()}/chat/completions"
 
-    for base_url in get_minimax_base_url_candidates():
-        client = build_llm_client(timeout=20.0, base_url=base_url)
-        for model in iter_models():
-            try:
-                with client.messages.stream(
-                    model=model,
-                    max_tokens=96,
-                    system=system_prompt,
-                    messages=messages,
-                ) as stream:
-                    for text in stream.text_stream:
-                        if text:
-                            yield text
-                print(f"[LLM STREAM] base_url={base_url} model={model} completed", flush=True)
-                return
-            except Exception as exc:
-                last_error = exc
-                print(f"[LLM STREAM RETRY] base_url={base_url} model={model} error={exc}", flush=True)
+    with httpx.Client(timeout=20.0) as client:
+        with client.stream("POST", url, headers=build_openrouter_headers(), json=payload) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if not line or not line.startswith("data: "):
+                    continue
+                chunk = line[6:].strip()
+                if chunk == "[DONE]":
+                    break
+                event = json.loads(chunk)
+                choices = event.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+                text = delta.get("content") or ""
+                if text:
+                    yield text
 
-    raise last_error
+    print(f"[LLM STREAM] provider=openrouter model={LLM_MODEL} completed", flush=True)
 
 
 def ensure_interactive_ending(reply):

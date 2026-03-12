@@ -1,6 +1,6 @@
 """
 30x Slides — Upload PPTX, get interactive HTML slides with Voice Bot.
-Stack: Flask + SocketIO + LibreOffice + pymupdf + Anthropic + Fish Audio
+Stack: Flask + SocketIO + LibreOffice + pymupdf + OpenRouter + Fish Audio
 
 [INPUT]: PPTX file upload and viewer talk requests with optional slide context
 [OUTPUT]: Interactive slide viewer with voice bot + downloadable HTML

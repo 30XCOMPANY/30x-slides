@@ -9,10 +9,9 @@ import os
 import re
 from pathlib import Path
 
-LLM_MODEL = "MiniMax-M2.5-highspeed"
-LLM_FALLBACK_MODEL = "MiniMax-M2.5"
-MINIMAX_BASE_URL = "https://api.minimax.io/anthropic"
-REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "FISH_AUDIO_API_KEY")
+LLM_MODEL = "arcee-ai/prime"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+REQUIRED_ENV_VARS = ("OPENROUTER_API_KEY", "FISH_AUDIO_API_KEY")
 
 
 def clean_env_value(value):
@@ -26,7 +25,7 @@ def env_flag(name):
 def log_boot_env():
     print(
         f"[BOOT] cwd={os.getcwd()} file_dir={Path(__file__).resolve().parent.parent} "
-        f"MINIMAX_API_KEY={env_flag('MINIMAX_API_KEY')} "
+        f"OPENROUTER_API_KEY={env_flag('OPENROUTER_API_KEY')} "
         f"FISH_AUDIO_API_KEY={env_flag('FISH_AUDIO_API_KEY')} "
         f"FISH_AUDIO_REFERENCE_ID={env_flag('FISH_AUDIO_REFERENCE_ID')}",
         flush=True,
@@ -43,22 +42,12 @@ def validate_required_env():
         )
 
 
-def get_minimax_key():
-    return clean_env_value(os.environ.get("MINIMAX_API_KEY", ""))
+def get_openrouter_key():
+    return clean_env_value(os.environ.get("OPENROUTER_API_KEY", ""))
 
 
-def get_minimax_base_url():
-    return (os.environ.get("MINIMAX_BASE_URL", MINIMAX_BASE_URL) or MINIMAX_BASE_URL).strip()
-
-
-def get_minimax_base_url_candidates():
-    primary = get_minimax_base_url()
-    candidates = [primary]
-    if ".io/" in primary:
-        candidates.append(primary.replace(".io/", ".com/"))
-    elif ".com/" in primary:
-        candidates.append(primary.replace(".com/", ".io/"))
-    return candidates
+def get_openrouter_base_url():
+    return (os.environ.get("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL) or OPENROUTER_BASE_URL).strip()
 
 
 def get_fish_audio_key():
