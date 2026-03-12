@@ -35,7 +35,13 @@ app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100MB
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
-FONT_DIR = Path.home() / "Library" / "Fonts"
+# ---- 字体目录 (macOS vs Linux) ----
+import platform
+if platform.system() == "Darwin":
+    FONT_DIR = Path.home() / "Library" / "Fonts"
+else:
+    FONT_DIR = Path.home() / ".local" / "share" / "fonts"
+FONT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---- MiniMax LLM ----
@@ -206,11 +212,16 @@ def extract_slide_content(pptx_path):
 def convert_deck(deck_dir):
     pptx_path = os.path.join(deck_dir, "deck.pptx")
 
-    # ---- LibreOffice 无头渲染 (跨平台, 无依赖, 稳定) ----
-    subprocess.run(
+    # ---- LibreOffice 无头渲染 ----
+    print(f"[CONVERT] LibreOffice starting: {pptx_path}", flush=True)
+    result = subprocess.run(
         ["soffice", "--headless", "--convert-to", "pdf", pptx_path, "--outdir", deck_dir],
-        check=True, capture_output=True,
+        capture_output=True, text=True, timeout=120,
     )
+    print(f"[CONVERT] LibreOffice done, rc={result.returncode}", flush=True)
+    if result.returncode != 0:
+        print(f"[CONVERT ERROR] {result.stderr}", flush=True)
+        raise RuntimeError(f"LibreOffice failed: {result.stderr}")
     doc = fitz.open(os.path.join(deck_dir, "deck.pdf"))
     total = len(doc)
     for i in range(total):
