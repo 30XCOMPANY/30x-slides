@@ -122,18 +122,26 @@ def build_greeting(all_content):
         titles.append(title)
 
     if not titles:
-        return "Alright, I can quickly summarize the whole thing and walk you through it step by step. How do you wanna learn this?"
+        return "Hey, good to have you here. I can give you the big-picture summary first and then walk through the details. What do you want to understand first?"
 
     themes = titles[:4]
     if len(themes) == 1:
-        return f"Alright, this mainly covers {themes[0]}. I can summarize it first or go slide by slide. How do you wanna learn this?"
+        return (
+            f"Hey, good to have you here. This deck mainly covers {themes[0]}. "
+            "I can break down the main idea and then go deeper wherever you want. "
+            "What do you want to understand first?"
+        )
 
     if len(themes) == 2:
         theme_text = f"{themes[0]} and {themes[1]}"
     else:
         theme_text = ", ".join(themes[:-1]) + f", and {themes[-1]}"
 
-    return f"Alright, this deck is basically about {theme_text}. I can give you the big-picture summary or teach it step by step. How do you wanna learn this?"
+    return (
+        f"Hey, good to have you here. This deck is mainly about {theme_text}. "
+        "I can give you the big picture first or jump into any section you want. "
+        "What do you want to understand first?"
+    )
 
 
 def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
@@ -220,7 +228,7 @@ Spoken voice only. No markdown, no bullets, no lists.
 
 VIBE: Casual, warm, and tutor-like. Sound like a smart human guide, not a narrator.
 
-[GREET]: Under 34 words. First summarize what this deck is about in plain language, mention 2-4 main themes, then ask "How do you wanna learn this?" Do NOT include [GO:N].
+[GREET]: EXACT STRUCTURE: first greet the user naturally, then summarize the deck in plain language with 2-4 major themes, then ask what they want to understand first. End with a question like "What do you want to understand first?" Do NOT include [GO:N].
 
 REPLIES: ALWAYS 3-5 short sentences. The last sentence MUST be interactive and invite the user to choose a next move, like "Do you want the short version, the deeper takeaway, or the next slide?" Keep it natural and conversational.
 
