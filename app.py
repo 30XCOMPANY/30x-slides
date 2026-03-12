@@ -65,11 +65,9 @@ print(
 
 # ---- API Keys (运行时读取，兼容 Railway 注入) ----
 MINIMAX_MODEL = "MiniMax-M2.5-highspeed"
-MINIMAX_API_CANDIDATES = (
-    "https://api.minimax.io/v1/chat/completions",
-    "https://api.minimax.io/v1/text/chatcompletion_v2",
-    "https://api.minimaxi.com/v1/chat/completions",
-    "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+MINIMAX_ANTHROPIC_BASE_URLS = (
+    "https://api.minimax.io/anthropic",
+    "https://api.minimaxi.com/anthropic",
 )
 REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "FISH_AUDIO_API_KEY")
 
@@ -371,64 +369,38 @@ def apply_font_replacements(pptx_path, replacements, weight_map=None):
 # ============================================================
 # LLM — MiniMax (OpenAI 兼容)
 # ============================================================
-def chat_with_llm(messages):
-    """Call MiniMax with ordered endpoint fallback across compatible domains."""
-    payload = json.dumps({
-        "model": MINIMAX_MODEL,
-        "messages": messages,
-        "max_tokens": 80,
-        "reasoning_split": True,
-    })
+def chat_with_llm(system_prompt, messages):
+    """Call MiniMax through the official Anthropic-compatible API."""
+    from anthropic import Anthropic
+
     last_error = None
-    raw = None
 
-    for api_url in MINIMAX_API_CANDIDATES:
-        req = urllib.request.Request(
-            api_url,
-            data=payload.encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {get_minimax_key()}",
-            },
-        )
+    for base_url in MINIMAX_ANTHROPIC_BASE_URLS:
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read()
-            print(f"[LLM] endpoint_ok={api_url}", flush=True)
-            break
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode("utf-8", errors="replace")
-            print(
-                f"[LLM HTTP ERROR] endpoint={api_url} status={e.code} body={error_body}",
-                flush=True,
+            client = Anthropic(api_key=get_minimax_key(), base_url=base_url)
+            response = client.messages.create(
+                model=MINIMAX_MODEL,
+                max_tokens=80,
+                system=system_prompt,
+                messages=messages,
             )
-            last_error = e
+            print(f"[LLM] endpoint_ok={base_url}", flush=True)
+
+            text_blocks = [
+                block.text
+                for block in response.content
+                if getattr(block, "type", "") == "text" and getattr(block, "text", "")
+            ]
+            content = "".join(text_blocks).strip()
+            if not content:
+                content = "I'm not sure how to respond to that."
+            print(f"[LLM] content present: {bool(content)}, len={len(content)}", flush=True)
+            return content
         except Exception as e:
-            print(f"[LLM REQUEST ERROR] endpoint={api_url} error={e}", flush=True)
+            print(f"[LLM REQUEST ERROR] base_url={base_url} error={e}", flush=True)
             last_error = e
 
-    if raw is None:
-        raise last_error or RuntimeError("MiniMax request failed with no response")
-
-    data = json.loads(raw)
-
-    if data.get("error"):
-        error_message = data["error"].get("message", "unknown error")
-        print(f"[LLM] API error: {error_message}", flush=True)
-        return f"Sorry, the AI service returned an error. ({error_message})"
-
-    msg = data.get("choices", [{}])[0].get("message", {})
-    content = msg.get("content", "")
-    if not content:
-        reasoning_details = msg.get("reasoning_details", [])
-        reasoning = "".join(
-            detail.get("text", "")
-            for detail in reasoning_details
-            if isinstance(detail, dict)
-        )
-        content = reasoning or "I'm not sure how to respond to that."
-    print(f"[LLM] content present: {bool(content)}, len={len(content)}", flush=True)
-    return content
+    raise last_error or RuntimeError("MiniMax request failed with no response")
 
 
 
@@ -591,14 +563,14 @@ def api_talk(deck_id):
     if not is_internal:
         history.append({"role": "user", "content": text})
 
-    messages = [{"role": "system", "content": system_prompt}] + history
+    messages = list(history)
     if is_internal:
         messages.append({"role": "user", "content": text})
 
     # ---- LLM ----
     if text == "[GREET]":
         try:
-            reply = chat_with_llm(messages)
+            reply = chat_with_llm(system_prompt, messages)
             print(f"[GREET LLM] {reply[:120]}", flush=True)
         except Exception as e:
             print(f"[GREET FALLBACK] {e}", flush=True)
@@ -606,7 +578,7 @@ def api_talk(deck_id):
             print(f"[GREET LOCAL] {reply}", flush=True)
     else:
         try:
-            reply = chat_with_llm(messages)
+            reply = chat_with_llm(system_prompt, messages)
             print(f"[LLM] {reply[:120]}", flush=True)
         except Exception as e:
             print(f"[LLM ERROR] {e}", flush=True)
