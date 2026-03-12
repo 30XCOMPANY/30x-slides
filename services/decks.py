@@ -139,7 +139,7 @@ def build_greeting(all_content):
 def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
     """Fallback explanation when the hosted LLM is unavailable."""
     if not all_content:
-        return "I can keep going, but I need the slide content loaded first."
+        return "I can keep going, but I need the slide content loaded first. Want the quick summary or slide-by-slide version?"
 
     if current_slide_idx < 0 or current_slide_idx >= len(all_content):
         current_slide_idx = 0
@@ -150,10 +150,10 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
     body_lines = body_lines[1:4] if len(body_lines) > 1 else body_lines[:3]
 
     if not body_lines:
-        return f"This part is about {title}. Ask me to jump to another topic if you want."
+        return f"This part is about {title}. Do you want the short version, the key takeaway, or the next slide?"
 
     snippet = "; ".join(body_lines)
-    reply = f"This part is about {title}: {snippet}."
+    reply = f"This part is about {title}: {snippet}. Want the short version, the key takeaway, or the next slide?"
     return reply[:220].rstrip(" ,;:-") + ("." if not reply.endswith(".") else "")
 
 
@@ -191,11 +191,11 @@ def build_system_prompt(all_content, current_slide_idx):
 
 Spoken voice only. No markdown, no bullets, no lists.
 
-VIBE: Casual and sharp like "So basically..." or "Yeah, the idea here is...".
+VIBE: Casual, warm, and tutor-like. Sound like a smart human guide, not a narrator.
 
 [GREET]: Under 34 words. First summarize what this deck is about in plain language, mention 2-4 main themes, then ask "How do you wanna learn this?" Do NOT include [GO:N].
 
-REPLIES: MAX 18 WORDS. Prefer one sentence. Ask one short follow-up only when it helps. Never ramble.
+REPLIES: MAX 2 short sentences. Answer briefly, then offer a clear next move like "Want the short version, the deeper takeaway, or the next slide?" Keep it natural and conversational.
 
 Viewer is on Slide {current_slide_idx + 1} of {len(all_content)}.
 

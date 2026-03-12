@@ -48,14 +48,15 @@ def chat_with_llm(system_prompt, messages):
     return content
 
 
-def trim_spoken_reply(reply, max_chars=110, max_words=16):
+def trim_spoken_reply(reply, max_chars=170, max_words=26):
     reply = re.sub(r"\s+", " ", (reply or "")).strip()
     if not reply:
         return ""
 
-    first_sentence = re.split(r"(?<=[.!?])\s+", reply, maxsplit=1)[0].strip()
-    if first_sentence and len(first_sentence) <= max_chars:
-        return first_sentence
+    sentences = re.split(r"(?<=[.!?])\s+", reply)
+    first_two = " ".join(sentences[:2]).strip()
+    if first_two and len(first_two) <= max_chars:
+        return first_two
 
     words = reply.split()
     if len(words) > max_words:
@@ -128,14 +129,14 @@ def build_talk_response(deck_id, payload, output_folder):
     if is_internal:
         messages.append({"role": "user", "content": text})
 
+    normalized_text = text.lower()
+
     if text == "[GREET]":
-        try:
-            raw_reply = chat_with_llm(system_prompt, messages)
-            print(f"[GREET LLM] {raw_reply[:120]}", flush=True)
-        except Exception as exc:
-            print(f"[GREET FALLBACK] {exc}", flush=True)
-            raw_reply = build_greeting(all_content)
-            print(f"[GREET LOCAL] {raw_reply}", flush=True)
+        raw_reply = build_greeting(all_content)
+        print(f"[GREET LOCAL] {raw_reply}", flush=True)
+    elif normalized_text in {"hello", "hi", "hey", "hey there", "yo"}:
+        raw_reply = build_greeting(all_content)
+        print(f"[SMALLTALK LOCAL] {raw_reply}", flush=True)
     else:
         try:
             raw_reply = chat_with_llm(system_prompt, messages)
