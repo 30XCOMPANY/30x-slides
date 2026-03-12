@@ -4,3 +4,4 @@ pymupdf
 python-pptx
 lxml
 python-dotenv
+gunicorn
