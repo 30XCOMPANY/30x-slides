@@ -61,7 +61,7 @@ print(
 
 
 # ---- API Keys (运行时读取，兼容 Railway 注入) ----
-MINIMAX_API_URL = "https://api.minimax.io/v1/text/chatcompletion_v2"
+MINIMAX_API_URL = "https://api.minimax.io/v1/chat/completions"
 MINIMAX_MODEL = "MiniMax-M2.5-highspeed"
 REQUIRED_ENV_VARS = ("MINIMAX_API_KEY", "ELEVENLABS_API_KEY")
 
@@ -352,11 +352,12 @@ def apply_font_replacements(pptx_path, replacements, weight_map=None):
 # LLM — MiniMax (OpenAI 兼容)
 # ============================================================
 def chat_with_llm(messages):
-    """调用 MiniMax M2.5 highspeed，返回文本回复"""
+    """Call MiniMax via the OpenAI-compatible chat completions API."""
     payload = json.dumps({
         "model": MINIMAX_MODEL,
         "messages": messages,
         "max_tokens": 80,
+        "reasoning_split": True,
     })
     req = urllib.request.Request(
         MINIMAX_API_URL,
@@ -374,23 +375,22 @@ def chat_with_llm(messages):
         print(f"[LLM HTTP ERROR] status={e.code} body={error_body}", flush=True)
         raise
     data = json.loads(raw)
-    status = data.get("base_resp", {}).get("status_code")
-    print(f"[LLM] status={status}, base_resp={data.get('base_resp')}", flush=True)
 
-    if status and status != 0:
-        status_msg = data.get("base_resp", {}).get("status_msg", "unknown error")
-        print(f"[LLM] API error: {status_msg}", flush=True)
-        return f"Sorry, the AI service returned an error. ({status_msg})"
+    if data.get("error"):
+        error_message = data["error"].get("message", "unknown error")
+        print(f"[LLM] API error: {error_message}", flush=True)
+        return f"Sorry, the AI service returned an error. ({error_message})"
 
     msg = data.get("choices", [{}])[0].get("message", {})
     content = msg.get("content", "")
-    # MiniMax reasoning model 有时 content 为空，用 reasoning_content 兜底
     if not content:
-        reasoning = msg.get("reasoning_content", "")
-        if reasoning:
-            content = reasoning
-        else:
-            content = "I'm not sure how to respond to that."
+        reasoning_details = msg.get("reasoning_details", [])
+        reasoning = "".join(
+            detail.get("text", "")
+            for detail in reasoning_details
+            if isinstance(detail, dict)
+        )
+        content = reasoning or "I'm not sure how to respond to that."
     print(f"[LLM] content present: {bool(content)}, len={len(content)}", flush=True)
     return content
 
