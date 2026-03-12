@@ -1,3 +1,9 @@
+<!--
+[INPUT]: 依赖 Flask 注入的 deck_id、total、slide_content、font_report、system_fonts
+[OUTPUT]: 对外提供 slide viewer、voice bot、font replacement 交互
+[POS]: templates 的核心阅读页，被 /view/<deck_id> 路由渲染
+[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -370,6 +376,7 @@
 /* ---- Slides ---- */
 const total = {{ total }};
 const deckId = "{{ deck_id }}";
+const slideContent = {{ slide_content|tojson }};
 let current = 0;
 
 const container = document.getElementById('slides');
@@ -608,7 +615,13 @@ async function talkToBot(text) {
     const resp = await fetch(`/api/talk/${deckId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, slide_index: current, voice: 'elevenlabs', session_id: sessionId }),
+      body: JSON.stringify({
+        text,
+        slide_index: current,
+        voice: 'fish-audio',
+        session_id: sessionId,
+        all_content: slideContent,
+      }),
     });
     const data = await resp.json();
 

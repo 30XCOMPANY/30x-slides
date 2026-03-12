@@ -1,11 +1,11 @@
 """
 30x Slides — Upload PPTX, get interactive HTML slides with Voice Bot.
-Stack: Flask + SocketIO + LibreOffice + pymupdf + Kokoro TTS + Bailian LLM
+Stack: Flask + SocketIO + LibreOffice + pymupdf + Anthropic + Fish Audio
 
-[INPUT]: PPTX file upload
+[INPUT]: PPTX file upload and viewer talk requests with optional slide context
 [OUTPUT]: Interactive slide viewer with voice bot + downloadable HTML
-[POS]: Application entry point, orchestrates conversion + voice pipeline
-[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+[POS]: Application entry point, orchestrates conversion, deck state, and voice pipeline
+[PROTOCOL]: 变更时更新此头部，然后检查 AGENTS.md
 """
 
 import os
@@ -402,6 +402,48 @@ def load_deck_content(deck_id):
     return []
 
 
+def save_deck_content(deck_id, content):
+    deck_dir = os.path.join(app.config["OUTPUT_FOLDER"], deck_id)
+    os.makedirs(deck_dir, exist_ok=True)
+    content_path = os.path.join(deck_dir, "content.json")
+    with open(content_path, "w") as f:
+        json.dump(content, f, ensure_ascii=False)
+
+
+def normalize_deck_content(raw_content):
+    """Accept trusted deck content from the viewer when container-local files are gone."""
+    if not isinstance(raw_content, list):
+        return []
+
+    normalized = []
+    for index, item in enumerate(raw_content, start=1):
+        if not isinstance(item, dict):
+            continue
+
+        texts = item.get("text", [])
+        if not isinstance(texts, list):
+            texts = []
+        texts = [str(line).strip() for line in texts if str(line).strip()]
+
+        notes = item.get("notes", "")
+        if not isinstance(notes, str):
+            notes = str(notes or "")
+
+        slide_number = item.get("slide", index)
+        try:
+            slide_number = int(slide_number)
+        except Exception:
+            slide_number = index
+
+        normalized.append({
+            "slide": slide_number,
+            "text": texts,
+            "notes": notes.strip(),
+        })
+
+    return normalized
+
+
 def get_slide_title(sc):
     """提取 slide 标题 (第一个文字元素)"""
     return sc["text"][0] if sc.get("text") else f"Slide {sc['slide']}"
@@ -530,9 +572,16 @@ def api_talk(deck_id):
         pptx_path = os.path.join(deck_dir, "deck.pptx")
         if os.path.exists(pptx_path):
             all_content = extract_slide_content(pptx_path)
-            with open(os.path.join(deck_dir, "content.json"), "w") as f:
-                json.dump(all_content, f, ensure_ascii=False)
+            save_deck_content(deck_id, all_content)
             print(f"[TALK] extracted {len(all_content)} slides content", flush=True)
+
+    if not all_content:
+        client_content = normalize_deck_content(data.get("all_content"))
+        if client_content:
+            all_content = client_content
+            save_deck_content(deck_id, all_content)
+            print(f"[TALK] restored {len(all_content)} slides content from viewer payload", flush=True)
+
     system_prompt = build_system_prompt(all_content, slide_idx)
 
     # ---- 对话历史 ----
