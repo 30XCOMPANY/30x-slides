@@ -639,6 +639,7 @@ def slide_image(deck_id, filename):
     return send_from_directory(os.path.join(app.config["OUTPUT_FOLDER"], deck_id), filename)
 
 
+os.makedirs(app.config["OUTPUT_FOLDER"], exist_ok=True)
+
 if __name__ == "__main__":
-    os.makedirs(app.config["OUTPUT_FOLDER"], exist_ok=True)
     socketio.run(app, debug=False, port=8080, host="0.0.0.0", allow_unsafe_werkzeug=True)

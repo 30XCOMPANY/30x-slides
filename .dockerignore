@@ -1,0 +1,7 @@
+output/
+uploads/
+.env
+.git/
+*.wav
+*.mp3
+__pycache__/
