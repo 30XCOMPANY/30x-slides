@@ -282,8 +282,12 @@ def stream_talk_response(deck_id, payload, output_folder):
         yield from stream_scripted_reply(raw_reply, inferred_nav)
         return
 
-    # [GREET] 走 LLM 生成 deck summary; hi/hello/其他问题也走 LLM (有 history 不会重复 greet)
+    # [GREET] 走 LLM 生成 deck summary; 但如果 history 里已经有 assistant 消息, 说明已经 greet 过了
     if text == "[GREET]":
+        if history:
+            # 已经 greet 过了 (比如用户刷新页面), 直接开 mic
+            yield emit_event("done", text="", nav=None)
+            return
         system_prompt = build_greeting_prompt(all_content)
         fallback_fn = lambda: build_greeting(all_content)
     else:

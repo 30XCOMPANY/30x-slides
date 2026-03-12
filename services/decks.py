@@ -547,11 +547,22 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
     return " ".join(parts[:3])
 
 
+def build_slide_index(all_content):
+    """每页: 标题 + 前 3 行内容摘要, 给 LLM 足够信息做导航"""
+    lines = []
+    for sc in all_content:
+        title = get_slide_title(sc)
+        body = sc.get("text", [])[1:4]
+        summary = " | ".join(b for b in body if b.strip())
+        if summary:
+            lines.append(f"  Slide {sc['slide']}: {title} — {summary}")
+        else:
+            lines.append(f"  Slide {sc['slide']}: {title}")
+    return "\n".join(lines)
+
+
 def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True):
-    title_index = ""
-    for slide_content in all_content:
-        title = get_slide_title(slide_content)
-        title_index += f"  Slide {slide_content['slide']}: {title}\n"
+    slide_index = build_slide_index(all_content)
 
     current_detail = ""
     if 0 <= current_slide_idx < len(all_content):
@@ -563,59 +574,38 @@ def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True)
 
     nav_block = ""
     if allow_control_tags:
-        nav_examples = ""
-        example_slides = []
-        for slide_content in all_content:
-            title = get_slide_title(slide_content)
-            if title and title.lower() not in IGNORED_TITLES:
-                example_slides.append((slide_content["slide"], title))
+        nav_block = """
+===== NAVIGATION =====
+When the user mentions a topic that matches a slide, include [GO:N] in your reply (N = slide number).
+The system strips [GO:N] before showing text to the user and auto-jumps to that slide.
 
-        for slide_number, slide_title in example_slides[:3]:
-            keyword = slide_title.split()[0].lower() if slide_title.split() else slide_title.lower()
-            nav_examples += (
-                f'- User says "{keyword}" → you write [GO:{slide_number}] '
-                f'because Slide {slide_number} is "{slide_title}"\n'
-            )
-        nav_examples += '- User says "next" → you write [GO:next]\n'
-        nav_examples += '- User says "go back" → you write [GO:prev]\n'
-
-        nav_block = f"""
-===== NAVIGATION RULES (MANDATORY) =====
-When the user mentions ANY topic, keyword, or phrase that relates to a slide title, you MUST include [GO:N].
-
-EXAMPLES from this deck:
-{nav_examples}
-HOW IT WORKS: You write [GO:N] anywhere in your reply. The system removes it before showing to user and auto-jumps the slide.
-
-RULES:
-1. Match loosely. Any recognizable keyword should navigate.
-2. Never ask whether to navigate. Just include [GO:N].
-3. "next" → [GO:next], "back"/"previous" → [GO:prev].
-4. If user asks about a topic and you omit [GO:N], your response is wrong.
-5. Always include [GO:N] before your spoken text, like: [GO:3] So this one covers...
-======================================="""
+- Match by CONTENT, not just title. If user says "impact" and Slide 8 has impact data, write [GO:8].
+- "next" → [GO:next], "back"/"previous" → [GO:prev].
+- Never ask whether to navigate. Just include [GO:N].
+- Put [GO:N] at the start of your reply.
+======================="""
     else:
         nav_block = """
 NAVIGATION:
 Do not output control tags or bracketed commands.
 Answer naturally only. Navigation is handled outside the model."""
 
-    return f"""You are a friendly guide helping someone explore a slide deck.
+    return f"""You are a friendly guide helping someone explore a presentation.
 
 RULES:
 - Spoken voice only. No markdown, bullets, or lists.
 - Casual and warm. Like a smart friend explaining a topic.
-- NEVER say "this slide mentions", "this slide shows", "this slide covers", "the slide talks about", "this deck", "the deck", "put together", "the presenter", "the speaker", or any variation. Just dive straight into the content. Instead of "This slide covers customer challenges", say "So the big customer challenge here is..."
-- Synthesize the ideas, don't narrate. Explain WHY it matters.
+- NEVER say "this slide", "this deck", "the deck", "put together", "the presenter", "the speaker". Just dive into the content directly. Say "So the big challenge here is..." not "This slide covers..."
+- Synthesize ideas. Explain WHY it matters, don't just list what's on screen.
 - Keep replies to 3-5 short sentences. End with a natural question or offer.
-- Never repeat what you just said in the same turn.
-- You are NOT the speaker or presenter. Never say "I" when referring to the deck's author.
-- If the user says hi/hello and you already greeted them, don't greet again — just respond naturally.
+- You are NOT the speaker or presenter.
+- If the user already got a greeting, don't greet again.
 
 Viewer is on Slide {current_slide_idx + 1} of {len(all_content)}.
 
-SLIDE TITLES:
-{title_index}
-CURRENT SLIDE:
+SLIDE INDEX (title + key content):
+{slide_index}
+
+CURRENT SLIDE DETAIL:
 {current_detail}
 {nav_block}"""
