@@ -472,31 +472,35 @@ function meaningfulGreetingText(text) {
 }
 
 function buildLocalGreeting() {
-  const phrases = [];
+  const sections = [];
   for (const slide of (slideContent || [])) {
     const lines = Array.isArray(slide.text) ? slide.text : [];
     for (const line of lines.slice(0, 3)) {
       const phrase = meaningfulGreetingText(line);
       if (!phrase) continue;
-      if (!phrases.some(existing => existing.toLowerCase() === phrase.toLowerCase())) {
-        phrases.push(phrase);
+      if (!sections.some(existing => existing.toLowerCase() === phrase.toLowerCase())) {
+        sections.push(phrase);
       }
-      if (phrases.length >= 3) break;
+      if (sections.length >= 3) break;
     }
-    if (phrases.length >= 3) break;
+    if (sections.length >= 3) break;
   }
 
-  if (!phrases.length) {
-    return 'Hey, good to have you here. I can give you the big picture first, then walk through the details. What do you want to understand first?';
+  if (!sections.length) {
+    return 'Hey, good to have you here. I can walk you through the main sections, give you the high-level summary, and then go deeper wherever you want. Which part do you want to start with?';
   }
 
-  const summary = phrases.length === 1
-    ? phrases[0]
-    : phrases.length === 2
-      ? `${phrases[0]} and ${phrases[1]}`
-      : `${phrases[0]}, ${phrases[1]}, and ${phrases[2]}`;
+  const sectionList = sections.length === 1
+    ? sections[0]
+    : sections.length === 2
+      ? `${sections[0]} and ${sections[1]}`
+      : `${sections[0]}, ${sections[1]}, and ${sections[2]}`;
 
-  return `Hey, good to have you here. This deck is really about ${summary}. I can give you the big picture, zoom into one section, or walk it slide by slide. What do you want to understand first?`;
+  const summary = sections.length === 1
+    ? `At a high level, it is building one clear story around ${sections[0]}.`
+    : `At a high level, it connects these sections into one bigger story, instead of treating them like separate bullets.`;
+
+  return `Hey, good to have you here. The main sections here are ${sectionList}. ${summary} Which section do you want to start with?`;
 }
 
 function startGreeting() {

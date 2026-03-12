@@ -310,13 +310,17 @@ def infer_navigation_target(user_text, all_content, current_slide_idx):
 def build_greeting(all_content):
     themes = extract_theme_phrases(all_content)
     if not themes:
-        return "Hey, good to have you here. I can give you the big-picture summary first and then walk through the details. What do you want to understand first?"
-    theme_text = join_phrases(themes)
+        return "Hey, good to have you here. I can walk you through the main sections, give you the high-level summary, and then go deeper wherever you want. Which section do you want to start with?"
+    section_text = join_phrases(themes[:3])
+    summary = (
+        f"At a high level, it is building one clear story around {themes[0]}."
+        if len(themes) == 1
+        else "At a high level, it connects these sections into one bigger story instead of treating them like isolated bullets."
+    )
 
     return (
-        f"Hey, good to have you here. This deck is really about {theme_text}. "
-        "I can give you the big picture, zoom into one section, or walk it slide by slide. "
-        "What do you want to understand first?"
+        f"Hey, good to have you here. The main sections here are {section_text}. "
+        f"{summary} Which section do you want to start with?"
     )
 
 
