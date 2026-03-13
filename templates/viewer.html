@@ -436,6 +436,33 @@ function showToast(msg) {
 const sessionId = Math.random().toString(36).slice(2);
 let conversationMode = false;
 let currentAudio = null;
+
+/* ---- 音频归一化: 所有 TTS 音频经过压缩器, 消除音量跳变 ---- */
+let audioCtx = null;
+let compressor = null;
+
+function getAudioPipeline() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.value = -24;
+    compressor.knee.value = 12;
+    compressor.ratio.value = 6;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.15;
+    compressor.connect(audioCtx.destination);
+  }
+  return { ctx: audioCtx, compressor };
+}
+
+function routeAudioThroughCompressor(audioEl) {
+  try {
+    const { ctx, compressor: comp } = getAudioPipeline();
+    if (ctx.state === 'suspended') ctx.resume();
+    const source = ctx.createMediaElementSource(audioEl);
+    source.connect(comp);
+  } catch (e) { /* 降级: 不经过压缩器也能播 */ }
+}
 let recognition = null;
 let isBusy = false;
 let hasGreeted = false;
@@ -746,11 +773,11 @@ function maybeResumeMic() {
   if (currentAudio) return;
   if (pendingSpeechText.trim()) return;
   if (speechQueue.length) return;
-  /* 延迟 1.5s 再开 mic, 等 TTS 回声完全消散 */
+  /* 延迟 800ms 再开 mic, 等 TTS 回声消散 */
   setTimeout(() => {
     if (!conversationMode || isBusy || currentAudio || speechQueue.length) return;
     openMic();
-  }, 1500);
+  }, 800);
 }
 
 let preloadedSegment = null; /* {audio, displayText} */
@@ -758,7 +785,10 @@ let displayedBotText = '';   /* 已显示在字幕上的文字(随 TTS 播放累
 let finalBotText = '';       /* done 事件的完整文字 */
 
 function makeAudioForText(text) {
-  return new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+  const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+  audio.crossOrigin = 'anonymous';
+  routeAudioThroughCompressor(audio);
+  return audio;
 }
 
 function preloadNextAudio() {
@@ -798,11 +828,12 @@ function playNextQueuedSentence() {
     /* 音频开始播 → 同步显示这段文字 */
     displayedBotText = displayedBotText ? displayedBotText + ' ' + displayText : displayText;
     showBotText(displayedBotText);
-    preloadNextAudio();
   };
   audio.onended = () => { currentAudio = null; playNextQueuedSentence(); };
   audio.onerror = () => { currentAudio = null; playNextQueuedSentence(); };
   audio.play().catch(() => { currentAudio = null; playNextQueuedSentence(); });
+  /* play() 调用后立刻预加载下一段, 不等 onplaying */
+  preloadNextAudio();
 }
 
 function flushPendingSpeech() {
@@ -830,15 +861,13 @@ function enqueueSentenceSpeech(text) {
   pendingSpeechText = pendingSpeechText ? `${pendingSpeechText} ${cleaned}` : cleaned;
   pendingSentenceCount++;
   clearTimeout(pendingSpeechTimer);
-  /* 第一批: 1 句就发 (用户最快听到声音); 后续: 攒 2 句再发 (流畅衔接) */
-  const isFirstBatch = totalFlushedBatches === 0 && !currentAudio;
-  const shouldFlushNow = isFirstBatch || pendingSentenceCount >= 2 || pendingSpeechText.length >= 300;
-  if (shouldFlushNow) {
-    flushPendingSpeech();
-    return;
-  }
-  /* 如果 400ms 内没新句子来, 也发出去 (避免最后一句卡住) */
-  pendingSpeechTimer = setTimeout(flushPendingSpeech, 400);
+  /*
+   * 策略: 每句到了就立刻发 TTS, 不攒批
+   * — 第一句: 立刻发, 用户最快听到声音
+   * — 后续句: 也立刻发, 趁前一句播放时预加载, 消除句间空白
+   * TTS 调用数增加但衔接零间隔, 体验远优于攒批
+   */
+  flushPendingSpeech();
 }
 </script>
 </body>

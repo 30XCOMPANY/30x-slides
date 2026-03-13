@@ -28,6 +28,12 @@ from services.decks import (
     save_deck_content,
 )
 
+# --- 持久连接池: 避免每次请求重建 TCP/TLS ---
+_http_client = httpx.Client(
+    timeout=httpx.Timeout(connect=5.0, read=20.0, write=5.0, pool=5.0),
+    limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+)
+
 _chat_histories = {}
 _pregenerated_greetings = {}
 
@@ -94,11 +100,9 @@ def chat_with_llm(system_prompt, messages):
         "temperature": 0.6,
     }
     url = f"{get_openrouter_base_url()}/chat/completions"
-
-    with httpx.Client(timeout=10.0) as client:
-        response = client.post(url, headers=build_openrouter_headers(), json=payload)
-        response.raise_for_status()
-        content = extract_openrouter_text(response.json()) or "I'm not sure how to respond to that."
+    response = _http_client.post(url, headers=build_openrouter_headers(), json=payload)
+    response.raise_for_status()
+    content = extract_openrouter_text(response.json()) or "I'm not sure how to respond to that."
 
     print(
         f"[LLM] provider=openrouter model={LLM_MODEL} content_present={bool(content)} len={len(content)}",
@@ -117,23 +121,22 @@ def stream_chat_with_llm(system_prompt, messages):
     }
     url = f"{get_openrouter_base_url()}/chat/completions"
 
-    with httpx.Client(timeout=20.0) as client:
-        with client.stream("POST", url, headers=build_openrouter_headers(), json=payload) as response:
-            response.raise_for_status()
-            for line in response.iter_lines():
-                if not line or not line.startswith("data: "):
-                    continue
-                chunk = line[6:].strip()
-                if chunk == "[DONE]":
-                    break
-                event = json.loads(chunk)
-                choices = event.get("choices") or []
-                if not choices:
-                    continue
-                delta = choices[0].get("delta") or {}
-                text = delta.get("content") or ""
-                if text:
-                    yield text
+    with _http_client.stream("POST", url, headers=build_openrouter_headers(), json=payload) as response:
+        response.raise_for_status()
+        for line in response.iter_lines():
+            if not line or not line.startswith("data: "):
+                continue
+            chunk = line[6:].strip()
+            if chunk == "[DONE]":
+                break
+            event = json.loads(chunk)
+            choices = event.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta") or {}
+            text = delta.get("content") or ""
+            if text:
+                yield text
 
     print(f"[LLM STREAM] provider=openrouter model={LLM_MODEL} completed", flush=True)
 
