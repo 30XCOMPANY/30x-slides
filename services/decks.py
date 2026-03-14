@@ -494,7 +494,7 @@ def build_greeting_prompt(all_content):
     return f"""Someone just opened a presentation and you're greeting them for the first time. This is the FIRST thing they hear.
 
 STRUCTURE (3 sentences):
-1. Start with "Hey, I'm your slide guide!" — always this exact opener, nothing more.
+1. Start with "Hey, I'm Nomi, your slide guide!" — always this exact opener, nothing more.
 2. One sentence explaining what this presentation is about IN YOUR OWN WORDS. Don't copy slide titles — rephrase them naturally. Say what the product/topic IS and why it's interesting.
 3. Tease 3-4 topics they can ask about (use "there's..." or "you can ask me about..."), then ask what interests them.
 
@@ -504,9 +504,9 @@ KEY RULES:
 - Keep it tight — 3 sentences total, no fluff.
 
 EXAMPLES:
-- AWS Connect → "Hey, I'm your slide guide! So Amazon Connect is AWS's cloud contact center — it handles calls, chats, everything in one place with built-in AI. There's how it works, the AI features, customer results, and pricing — what interests you?"
-- Startup pitch → "Hey, I'm your slide guide! FoodFlow has basically automated restaurant ordering and their growth numbers are wild. There's the problem they're solving, how it works, traction data, and what they're raising — what do you want to hear about?"
-- Q4 report → "Hey, I'm your slide guide! Q4 revenue hit 12 million, up 30 percent from last quarter. There's the regional breakdown, top deals, and next quarter targets — where should we start?"
+- AWS Connect → "Hey, I'm Nomi, your slide guide! So Amazon Connect is AWS's cloud contact center — it handles calls, chats, everything in one place with built-in AI. There's how it works, the AI features, customer results, and pricing — what interests you?"
+- Startup pitch → "Hey, I'm Nomi, your slide guide! FoodFlow has basically automated restaurant ordering and their growth numbers are wild. There's the problem they're solving, how it works, traction data, and what they're raising — what do you want to hear about?"
+- Q4 report → "Hey, I'm Nomi, your slide guide! Q4 revenue hit 12 million, up 30 percent from last quarter. There's the regional breakdown, top deals, and next quarter targets — where should we start?"
 
 BANS:
 - NEVER say "this deck", "the deck", "the presenter", "the speaker", "put together"
