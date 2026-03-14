@@ -356,12 +356,13 @@ def api_tts():
 def api_tts_stream():
     """Fish Audio streaming proxy — progressive MP3 bytes for immediate playback."""
     text = (request.args.get("text") or "").strip()
+    voice = (request.args.get("voice") or "").strip() or None
     if not text:
         return ("", 204)
 
     try:
         return Response(
-            stream_fish_audio(text),
+            stream_fish_audio(text, reference_id=voice),
             mimetype="audio/mpeg",
             headers={
                 "Cache-Control": "no-store",

@@ -19,16 +19,17 @@ FISH_HTTP_URL = "https://api.fish.audio/v1/tts"
 FISH_WS_URL = "wss://api.fish.audio/v1/tts/live"
 
 
-def synthesize_fish_audio(text):
+def synthesize_fish_audio(text, reference_id=None):
     text = (text or "").strip()
     if not text:
         return ""
 
-    print(f"[TTS] Fish Audio request: {len(text)} chars", flush=True)
+    ref = reference_id or get_fish_audio_reference_id()
+    print(f"[TTS] Fish Audio request: {len(text)} chars voice={ref[:8]}", flush=True)
 
     payload = json.dumps({
         "text": text,
-        "reference_id": get_fish_audio_reference_id(),
+        "reference_id": ref,
         "format": "mp3",
         "prosody": {"speed": 1.1},
     })
@@ -55,12 +56,13 @@ def _pack_message(event, **payload):
     return msgpack.packb(data, use_bin_type=True)
 
 
-def stream_fish_audio(text):
+def stream_fish_audio(text, reference_id=None):
     text = (text or "").strip()
     if not text:
         return
 
-    print(f"[TTS STREAM] Fish Audio request: {len(text)} chars", flush=True)
+    ref = reference_id or get_fish_audio_reference_id()
+    print(f"[TTS STREAM] Fish Audio request: {len(text)} chars voice={ref[:8]}", flush=True)
     ws = create_connection(
         FISH_WS_URL,
         header=[
@@ -78,7 +80,7 @@ def stream_fish_audio(text):
                     "request_id": str(uuid.uuid4()),
                     "text": "",
                     "format": "mp3",
-                    "reference_id": get_fish_audio_reference_id(),
+                    "reference_id": ref,
                     "chunk_length": 150,
                     "latency": "normal",
                     "prosody": {"speed": 1.1},

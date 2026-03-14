@@ -225,6 +225,19 @@
     background: rgba(255, 152, 0, 0.25);
   }
 
+  .voice-select {
+    background: none; border: 1px solid var(--line-soft); color: var(--text-muted);
+    padding: 6px 10px; border-radius: 999px; cursor: pointer;
+    font-size: 12px; font-family: inherit; font-weight: 500;
+    outline: none; appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center;
+    padding-right: 24px; max-width: 120px;
+    transition: all 0.15s;
+  }
+  .voice-select:hover { border-color: var(--pill-bg); color: var(--text-strong); }
+  .voice-select:focus { border-color: var(--pill-bg); box-shadow: 0 0 0 2px rgba(76,61,98,0.15); }
+
   .bar-counter {
     color: var(--text-soft); font-size: 12px; padding: 0 10px;
     min-width: 48px; text-align: center; user-select: none;
@@ -362,6 +375,19 @@
   </button>
 
   <div class="divider"></div>
+
+  <!-- 声音选择 -->
+  <select class="voice-select" id="voiceSelect" title="Voice style">
+    <option value="">Default</option>
+    <option value="d8a1340984ee4b63ad1ffae27a6a4339">Elite (Confident)</option>
+    <option value="79d0bd3e4e5444b18f7b6d89b5927bf1">Jordan (Motivational)</option>
+    <option value="bf322df2096a46f18c579d0baa36f41d">Adrian (Narrator)</option>
+    <option value="e3cd384158934cc9a01029cd7d278634">Laura (Professional)</option>
+    <option value="802e3bc2b27e49c2995d23ef70e6ac89">Energetic Male</option>
+    <option value="b545c585f631496c914815291da4e893">Friendly Female</option>
+    <option value="536d3a5e000945adb7038665781a4aca">Ethan (Explainer)</option>
+    <option value="b347db033a6549378b48d00acb0d06cd">Selene (Calm)</option>
+  </select>
 
   <!-- Mic: 一个按钮搞定一切 -->
   <button class="bar-btn" id="micBtn" onclick="toggleMic()">
@@ -785,7 +811,10 @@ let displayedBotText = '';   /* 已显示在字幕上的文字(随 TTS 播放累
 let finalBotText = '';       /* done 事件的完整文字 */
 
 function makeAudioForText(text) {
-  const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`);
+  const voice = document.getElementById('voiceSelect').value;
+  let url = `/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`;
+  if (voice) url += `&voice=${encodeURIComponent(voice)}`;
+  const audio = new Audio(url);
   audio.crossOrigin = 'anonymous';
   routeAudioThroughCompressor(audio);
   return audio;
