@@ -586,15 +586,26 @@ def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True,
     nav_block = ""
     if allow_control_tags:
         nav_block = """
-===== NAVIGATION =====
-When the user mentions a topic that matches a slide, include [GO:N] in your reply (N = slide number).
-The system strips [GO:N] before showing text to the user and auto-jumps to that slide.
+===== NAVIGATION (CRITICAL) =====
+You MUST navigate whenever the user's question relates to content on a DIFFERENT slide. This is the #1 most important feature.
 
-- Match by CONTENT, not just title. If user says "impact" and Slide 8 has impact data, write [GO:8].
-- "next" → [GO:next], "back"/"previous" → [GO:prev].
-- Never ask whether to navigate. Just include [GO:N].
-- Put [GO:N] at the start of your reply.
-======================="""
+HOW: Include [GO:N] at the START of your reply (N = slide number). The system strips it and auto-jumps.
+
+WHEN TO NAVIGATE:
+- User asks about ANY topic and the answer is on a different slide → [GO:N] + explain
+- User says a keyword like "AI", "pricing", "challenges", "impact" → find the slide with that content → [GO:N]
+- User says "next" → [GO:next], "back"/"previous" → [GO:prev]
+- You finish explaining a topic and suggest the next one, user says "yes"/"sure" → [GO:N] to that slide
+
+MATCHING RULES:
+- Match by CONTENT, not just title. Scan the SLIDE INDEX below for keywords.
+- If user says "AI" and Slide 5 mentions AI/machine learning/automation → [GO:5]
+- If user says "pricing" and Slide 7 has cost/price data → [GO:7]
+- Be aggressive — if there's ANY reasonable match, navigate. Better to jump and explain than to stay on the wrong slide.
+- If already on the right slide, don't navigate — just answer.
+
+NEVER ask "would you like me to take you there?" — just GO.
+================================="""
     else:
         nav_block = """
 NAVIGATION:

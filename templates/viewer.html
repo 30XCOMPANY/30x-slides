@@ -754,9 +754,9 @@ async function talkToBot(text) {
           activeTalkController = null;
           finalBotText = event.text || '';
           applyNav(event.nav);
-          /* 如果没有 TTS 在播, 直接显示最终文字并开 mic */
+          /* 如果没有 TTS 在播, 清掉字幕并开 mic */
           if (!currentAudio && !speechQueue.length) {
-            showBotText(finalBotText);
+            hideSubtitle();
             maybeResumeMic();
           }
         }
@@ -863,8 +863,8 @@ function playNextQueuedSentence() {
     audio = makeAudioForText(seg.ttsText);
     displayText = seg.displayText;
   } else {
-    /* 所有音频播完, 显示最终完整文字 */
-    if (finalBotText) showBotText(finalBotText);
+    /* 所有音频播完, 清掉字幕 */
+    hideSubtitle();
     maybeResumeMic();
     return;
   }
@@ -874,9 +874,8 @@ function playNextQueuedSentence() {
   audio.oncanplay = activateFish;
   audio.onplaying = () => {
     activateFish();
-    /* 音频开始播 → 同步显示这段文字 */
-    displayedBotText = displayedBotText ? displayedBotText + ' ' + displayText : displayText;
-    showBotText(displayedBotText);
+    /* KTV 模式: 只显示当前正在说的这句话 */
+    showBotText(displayText);
   };
   audio.onended = () => { currentAudio = null; playNextQueuedSentence(); };
   audio.onerror = () => { currentAudio = null; playNextQueuedSentence(); };
