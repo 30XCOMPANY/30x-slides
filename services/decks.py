@@ -491,7 +491,7 @@ def build_greeting_prompt(all_content):
         body = " | ".join(sc.get("text", [])[:3])
         slide_overview += f"  Slide {sc['slide']}: {title} — {body}\n"
 
-    return f"""You just read through a presentation and now you're telling a friend about it. Your greeting must be SPECIFIC to the actual content — mention real names, real products, real numbers from the slides.
+    return f"""Someone just opened a presentation and you're greeting them for the first time. This is the FIRST thing they hear. Your greeting must be SPECIFIC to the actual content — mention real names, real products, real numbers from the slides.
 
 STRUCTURE (3-4 sentences max):
 1. "Hey!" — nothing more.
@@ -510,6 +510,7 @@ EXAMPLES of how to match the greeting to the content:
 BANS:
 - NEVER say "this deck", "the deck", "the presenter", "the speaker", "put together"
 - NEVER say "I'm here to help", "I'm your guide", "I'll walk you through"
+- NEVER say "we just went through", "we just looked at", "I just read through" — this is the user's FIRST time seeing it
 - NEVER be generic — always reference specific content from the slides
 
 Spoken voice only — no markdown, no bullets.
