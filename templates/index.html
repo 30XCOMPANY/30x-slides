@@ -78,10 +78,7 @@
     object-fit: cover;
     filter: saturate(0.92) contrast(0.95) brightness(1.02);
     opacity: 1;
-    transition: opacity 0.2s ease;
   }
-  .hero-video:not(.loaded) { opacity: 0.34; }
-  .hero-video.loaded { opacity: 1; }
 
   /* 视频上层叠加 — 复刻 hero-video-overlay 多层渐变 */
   .hero-overlay {
@@ -258,8 +255,7 @@
 <body>
 
 <div class="hero-bg">
-  <video class="hero-video" autoplay muted loop playsinline preload="auto"
-    oncanplaythrough="this.classList.add('loaded')" onplaying="this.classList.add('loaded')">
+  <video class="hero-video" autoplay muted loop playsinline preload="auto">
     <source src="/static/hero-bg.mp4" type="video/mp4">
   </video>
   <div class="hero-overlay"></div>
