@@ -618,9 +618,27 @@ function openMic() {
   resetIdleTimer();
 
   const rec = new SR();
-  rec.continuous = false;
+  rec.continuous = true;
   rec.interimResults = true;
   rec.lang = 'en-US';
+
+  let pendingTranscript = '';
+  let pendingConfidence = 0;
+  let silenceTimer = null;
+
+  function commitSpeech() {
+    silenceTimer = null;
+    const trimmed = pendingTranscript.trim();
+    const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
+    if (wordCount < 2 || (wordCount < 3 && pendingConfidence < 0.5)) {
+      console.log(`[MIC] dropped: "${trimmed}" words=${wordCount} conf=${pendingConfidence.toFixed(2)}`);
+      pendingTranscript = '';
+      pendingConfidence = 0;
+      return;
+    }
+    killMic();
+    talkToBot(trimmed);
+  }
 
   rec.onresult = (e) => {
     let interim = '', final = '';
@@ -635,20 +653,21 @@ function openMic() {
     }
     showUserText(final || interim);
     if (final) {
-      const trimmed = final.trim();
-      const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
-      /* 过滤垃圾: 1 个词且置信度低 → 扔掉, 重开 mic */
-      if (wordCount < 2 || (wordCount < 3 && confidence < 0.5)) {
-        console.log(`[MIC] dropped: "${trimmed}" words=${wordCount} conf=${confidence.toFixed(2)}`);
-        return;
-      }
-      killMic();
-      talkToBot(trimmed);
+      /* 累积 final 片段, 等用户停说话 1.2s 后才发送 */
+      pendingTranscript = final;
+      pendingConfidence = Math.max(pendingConfidence, confidence);
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(commitSpeech, 1200);
     }
   };
 
   rec.onend = () => {
-    /* 只有在 LISTENING 状态自然结束时才重开 (没听到话, 超时了) */
+    /* continuous 模式下 onend 可能被浏览器触发, 如果有待发内容立刻提交 */
+    if (pendingTranscript.trim() && voiceState === STATE.LISTENING) {
+      clearTimeout(silenceTimer);
+      commitSpeech();
+      return;
+    }
     if (voiceState === STATE.LISTENING && conversationMode) {
       setTimeout(openMic, 200);
     }
