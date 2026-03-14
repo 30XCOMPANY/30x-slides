@@ -225,18 +225,33 @@
     background: rgba(255, 152, 0, 0.25);
   }
 
-  .voice-select {
-    background: none; border: 1px solid var(--line-soft); color: var(--text-muted);
-    padding: 6px 10px; border-radius: 999px; cursor: pointer;
-    font-size: 12px; font-family: inherit; font-weight: 500;
-    outline: none; appearance: none; -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 8px center;
-    padding-right: 24px; max-width: 120px;
-    transition: all 0.15s;
+  .voice-picker { position: relative; }
+  .voice-picker-btn {
+    background: none; border: none; color: var(--text-muted);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    font-size: 13px; font-family: inherit; font-weight: 500;
+    transition: all 0.15s; display: flex; align-items: center; gap: 6px;
   }
-  .voice-select:hover { border-color: var(--pill-bg); color: var(--text-strong); }
-  .voice-select:focus { border-color: var(--pill-bg); box-shadow: 0 0 0 2px rgba(76,61,98,0.15); }
+  .voice-picker-btn:hover { background: var(--pill-bg); color: #fff; box-shadow: var(--pill-shadow); }
+  .voice-picker-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .voice-menu {
+    display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    background: var(--surface); border: 1px solid var(--line-soft);
+    border-radius: 16px; padding: 6px; min-width: 180px;
+    box-shadow: 0 8px 32px rgba(23,19,33,0.12); z-index: 20;
+  }
+  .voice-menu.open { display: block; }
+  .voice-menu-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px; border-radius: 10px; cursor: pointer;
+    font-size: 13px; font-family: inherit; color: var(--text-strong);
+    transition: background 0.12s; border: none; background: none; width: 100%; text-align: left;
+  }
+  .voice-menu-item:hover { background: rgba(43,36,56,0.05); }
+  .voice-menu-item.active { background: rgba(63,52,82,0.08); font-weight: 600; }
+  .voice-menu-item .voice-desc {
+    font-size: 11px; color: var(--text-soft); font-weight: 400;
+  }
 
   .bar-counter {
     color: var(--text-soft); font-size: 12px; padding: 0 10px;
@@ -378,17 +393,23 @@
   <div class="divider"></div>
 
   <!-- 声音选择 -->
-  <select class="voice-select" id="voiceSelect" title="Voice style">
-    <option value="">Nomi</option>
-    <option value="d8a1340984ee4b63ad1ffae27a6a4339">Elite (Confident)</option>
-    <option value="79d0bd3e4e5444b18f7b6d89b5927bf1">Jordan (Motivational)</option>
-    <option value="bf322df2096a46f18c579d0baa36f41d">Adrian (Narrator)</option>
-    <option value="e3cd384158934cc9a01029cd7d278634">Laura (Professional)</option>
-    <option value="802e3bc2b27e49c2995d23ef70e6ac89">Energetic Male</option>
-    <option value="b545c585f631496c914815291da4e893">Friendly Female</option>
-    <option value="536d3a5e000945adb7038665781a4aca">Ethan (Explainer)</option>
-    <option value="b347db033a6549378b48d00acb0d06cd">Selene (Calm)</option>
-  </select>
+  <div class="voice-picker">
+    <button class="voice-picker-btn" onclick="toggleVoiceMenu()" id="voiceBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span id="voiceLabel">Nomi</span>
+    </button>
+    <div class="voice-menu" id="voiceMenu">
+      <button class="voice-menu-item active" data-voice="" data-name="Nomi" onclick="pickVoice(this)">Nomi <span class="voice-desc">Default</span></button>
+      <button class="voice-menu-item" data-voice="d8a1340984ee4b63ad1ffae27a6a4339" data-name="Elite" onclick="pickVoice(this)">Elite <span class="voice-desc">Confident</span></button>
+      <button class="voice-menu-item" data-voice="79d0bd3e4e5444b18f7b6d89b5927bf1" data-name="Jordan" onclick="pickVoice(this)">Jordan <span class="voice-desc">Motivational</span></button>
+      <button class="voice-menu-item" data-voice="bf322df2096a46f18c579d0baa36f41d" data-name="Adrian" onclick="pickVoice(this)">Adrian <span class="voice-desc">Narrator</span></button>
+      <button class="voice-menu-item" data-voice="e3cd384158934cc9a01029cd7d278634" data-name="Laura" onclick="pickVoice(this)">Laura <span class="voice-desc">Professional</span></button>
+      <button class="voice-menu-item" data-voice="802e3bc2b27e49c2995d23ef70e6ac89" data-name="Marcus" onclick="pickVoice(this)">Marcus <span class="voice-desc">Energetic</span></button>
+      <button class="voice-menu-item" data-voice="b545c585f631496c914815291da4e893" data-name="Sophie" onclick="pickVoice(this)">Sophie <span class="voice-desc">Friendly</span></button>
+      <button class="voice-menu-item" data-voice="536d3a5e000945adb7038665781a4aca" data-name="Ethan" onclick="pickVoice(this)">Ethan <span class="voice-desc">Explainer</span></button>
+      <button class="voice-menu-item" data-voice="b347db033a6549378b48d00acb0d06cd" data-name="Selene" onclick="pickVoice(this)">Selene <span class="voice-desc">Calm</span></button>
+    </div>
+  </div>
 
   <!-- Mic: 一个按钮搞定一切 -->
   <button class="bar-btn" id="micBtn" onclick="toggleMic()">
@@ -414,6 +435,30 @@ for (let i = 1; i <= total; i++) {
   div.innerHTML = `<img src="/slides/${deckId}/slide-${i}.png?t=${Date.now()}" alt="Slide ${i}">`;
   container.appendChild(div);
 }
+
+/* ---- Voice picker ---- */
+let selectedVoice = '';
+let selectedVoiceName = 'Nomi';
+
+function toggleVoiceMenu() {
+  document.getElementById('voiceMenu').classList.toggle('open');
+}
+
+function pickVoice(el) {
+  selectedVoice = el.dataset.voice;
+  selectedVoiceName = el.dataset.name;
+  document.getElementById('voiceLabel').textContent = selectedVoiceName;
+  document.querySelectorAll('.voice-menu-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('voiceMenu').classList.remove('open');
+}
+
+/* 点击外部关闭菜单 */
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.voice-picker')) {
+    document.getElementById('voiceMenu').classList.remove('open');
+  }
+});
 
 function shareSlides() {
   const url = window.location.origin + '/view/{{ deck_id }}';
@@ -734,7 +779,7 @@ async function talkToBot(text) {
         text,
         slide_index: current,
         voice: 'fish-audio',
-        voice_name: document.getElementById('voiceSelect').selectedOptions[0].text,
+        voice_name: selectedVoiceName,
         session_id: sessionId,
         all_content: slideContent,
       }),
@@ -842,9 +887,8 @@ let displayedBotText = '';   /* 已显示在字幕上的文字(随 TTS 播放累
 let finalBotText = '';       /* done 事件的完整文字 */
 
 function makeAudioForText(text) {
-  const voice = document.getElementById('voiceSelect').value;
   let url = `/api/tts/stream?text=${encodeURIComponent(text)}&ts=${Date.now()}`;
-  if (voice) url += `&voice=${encodeURIComponent(voice)}`;
+  if (selectedVoice) url += `&voice=${encodeURIComponent(selectedVoice)}`;
   const audio = new Audio(url);
   audio.crossOrigin = 'anonymous';
   routeAudioThroughCompressor(audio);
