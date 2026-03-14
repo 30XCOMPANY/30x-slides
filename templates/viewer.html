@@ -618,27 +618,9 @@ function openMic() {
   resetIdleTimer();
 
   const rec = new SR();
-  rec.continuous = true;
+  rec.continuous = false;
   rec.interimResults = true;
   rec.lang = 'en-US';
-
-  let pendingTranscript = '';
-  let pendingConfidence = 0;
-  let silenceTimer = null;
-
-  function commitSpeech() {
-    silenceTimer = null;
-    const trimmed = pendingTranscript.trim();
-    const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
-    if (wordCount < 2 || (wordCount < 3 && pendingConfidence < 0.5)) {
-      console.log(`[MIC] dropped: "${trimmed}" words=${wordCount} conf=${pendingConfidence.toFixed(2)}`);
-      pendingTranscript = '';
-      pendingConfidence = 0;
-      return;
-    }
-    killMic();
-    talkToBot(trimmed);
-  }
 
   rec.onresult = (e) => {
     let interim = '', final = '';
@@ -653,21 +635,18 @@ function openMic() {
     }
     showUserText(final || interim);
     if (final) {
-      /* 累积 final 片段, 等用户停说话 1.2s 后才发送 */
-      pendingTranscript = final;
-      pendingConfidence = Math.max(pendingConfidence, confidence);
-      clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(commitSpeech, 1200);
+      const trimmed = final.trim();
+      const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
+      if (wordCount < 2 || (wordCount < 3 && confidence < 0.5)) {
+        console.log(`[MIC] dropped: "${trimmed}" words=${wordCount} conf=${confidence.toFixed(2)}`);
+        return;
+      }
+      killMic();
+      talkToBot(trimmed);
     }
   };
 
   rec.onend = () => {
-    /* continuous 模式下 onend 可能被浏览器触发, 如果有待发内容立刻提交 */
-    if (pendingTranscript.trim() && voiceState === STATE.LISTENING) {
-      clearTimeout(silenceTimer);
-      commitSpeech();
-      return;
-    }
     if (voiceState === STATE.LISTENING && conversationMode) {
       setTimeout(openMic, 200);
     }
