@@ -637,8 +637,8 @@ function openMic() {
     if (final) {
       const trimmed = final.trim();
       const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
-      /* 过滤垃圾: 少于 3 个词 或 置信度太低 → 扔掉, 重开 mic */
-      if (wordCount < 3 || confidence < 0.4) {
+      /* 过滤垃圾: 1 个词且置信度低 → 扔掉, 重开 mic */
+      if (wordCount < 2 || (wordCount < 3 && confidence < 0.5)) {
         console.log(`[MIC] dropped: "${trimmed}" words=${wordCount} conf=${confidence.toFixed(2)}`);
         return;
       }
