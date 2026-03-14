@@ -9,7 +9,7 @@ import os
 import re
 from pathlib import Path
 
-LLM_MODEL = "google/gemini-2.0-flash-001"
+LLM_MODEL = "google/gemini-2.5-flash-lite"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 REQUIRED_ENV_VARS = ("OPENROUTER_API_KEY", "FISH_AUDIO_API_KEY")
 
