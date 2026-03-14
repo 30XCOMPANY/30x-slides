@@ -618,9 +618,27 @@ function openMic() {
   resetIdleTimer();
 
   const rec = new SR();
-  rec.continuous = false;
+  rec.continuous = true;
   rec.interimResults = true;
   rec.lang = 'en-US';
+
+  let pendingTranscript = '';
+  let pendingConfidence = 0;
+  let silenceTimer = null;
+
+  function commitSpeech() {
+    silenceTimer = null;
+    const trimmed = pendingTranscript.trim();
+    pendingTranscript = '';
+    pendingConfidence = 0;
+    const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
+    if (wordCount < 2 || (wordCount < 3 && pendingConfidence < 0.5)) {
+      console.log(`[MIC] dropped: "${trimmed}" words=${wordCount}`);
+      return;
+    }
+    killMic();
+    talkToBot(trimmed);
+  }
 
   rec.onresult = (e) => {
     let interim = '', final = '';
@@ -635,18 +653,19 @@ function openMic() {
     }
     showUserText(final || interim);
     if (final) {
-      const trimmed = final.trim();
-      const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
-      if (wordCount < 2 || (wordCount < 3 && confidence < 0.5)) {
-        console.log(`[MIC] dropped: "${trimmed}" words=${wordCount} conf=${confidence.toFixed(2)}`);
-        return;
-      }
-      killMic();
-      talkToBot(trimmed);
+      pendingTranscript = final;
+      pendingConfidence = Math.max(pendingConfidence, confidence);
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(commitSpeech, 1200);
     }
   };
 
   rec.onend = () => {
+    if (pendingTranscript.trim() && voiceState === STATE.LISTENING) {
+      clearTimeout(silenceTimer);
+      commitSpeech();
+      return;
+    }
     if (voiceState === STATE.LISTENING && conversationMode) {
       setTimeout(openMic, 200);
     }
