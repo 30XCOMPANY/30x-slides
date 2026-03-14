@@ -559,11 +559,11 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
 
 
 def build_slide_index(all_content):
-    """每页: 标题 + 前 3 行内容摘要, 给 LLM 足够信息做导航"""
+    """每页: 标题 + 全部内容, 给 LLM 足够信息做精准导航"""
     lines = []
     for sc in all_content:
         title = get_slide_title(sc)
-        body = sc.get("text", [])[1:4]
+        body = sc.get("text", [])[1:]
         summary = " | ".join(b for b in body if b.strip())
         if summary:
             lines.append(f"  Slide {sc['slide']}: {title} — {summary}")
