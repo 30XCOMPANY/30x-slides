@@ -587,23 +587,22 @@ def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True,
     if allow_control_tags:
         nav_block = """
 ===== NAVIGATION (CRITICAL) =====
-You MUST navigate whenever the user's question relates to content on a DIFFERENT slide. This is the #1 most important feature.
+You MUST navigate whenever the user's message relates to content on a DIFFERENT slide. This is the #1 most important feature.
 
 HOW: Include [GO:N] at the START of your reply (N = slide number). The system strips it and auto-jumps.
 
 WHEN TO NAVIGATE:
-- User asks about ANY topic and the answer is on a different slide → [GO:N] + explain
-- User says a keyword like "AI", "pricing", "challenges", "impact" → find the slide with that content → [GO:N]
+- User mentions ANY topic, keyword, or concept that appears in a different slide's content → [GO:N] + explain
 - User says "next" → [GO:next], "back"/"previous" → [GO:prev]
-- You finish explaining a topic and suggest the next one, user says "yes"/"sure" → [GO:N] to that slide
+- You suggest the next topic, user says "yes"/"sure" → [GO:N] to that slide's number
 
-MATCHING RULES:
-- Match by CONTENT, not just title. Scan the SLIDE INDEX below for keywords.
-- If user says "AI" and Slide 5 mentions AI/machine learning/automation → [GO:5]
-- If user says "pricing" and Slide 7 has cost/price data → [GO:7]
-- Be aggressive — if there's ANY reasonable match, navigate. Better to jump and explain than to stay on the wrong slide.
-- If already on the right slide, don't navigate — just answer.
+MATCHING PROCESS (do this every time the user speaks):
+1. Read the user's message and identify the topic/keywords they're asking about
+2. Scan the SLIDE INDEX below — check every slide's title AND content for matches
+3. If a different slide has the best matching content → [GO:N] and explain that slide
+4. If the current slide already has the answer → just answer, no navigation
 
+Be aggressive — if there's ANY reasonable match on a different slide, navigate. Better to jump than to stay on the wrong slide.
 NEVER ask "would you like me to take you there?" — just GO.
 ================================="""
     else:
