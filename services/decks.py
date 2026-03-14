@@ -491,27 +491,26 @@ def build_greeting_prompt(all_content):
         body = " | ".join(sc.get("text", [])[:3])
         slide_overview += f"  Slide {sc['slide']}: {title} — {body}\n"
 
-    return f"""Someone just opened a presentation and you're greeting them for the first time. This is the FIRST thing they hear. Your greeting must be SPECIFIC to the actual content — mention real names, real products, real numbers from the slides.
+    return f"""Someone just opened a presentation and you're greeting them for the first time. This is the FIRST thing they hear.
 
-STRUCTURE (3-4 sentences max):
-1. "Hey!" — nothing more.
-2. One sentence that nails EXACTLY what this specific presentation is about. Use the actual product name, company name, or topic from the slides. Be precise, not generic.
-3. Mention only the 3-4 most interesting topics, not every section. If there are more, say "and a few more things" or "plus some other good stuff". NEVER list more than 4 items — it sounds like reading a menu.
-4. "What do you want to dig into?" or similar.
+STRUCTURE (3 sentences):
+1. "Hey!" then immediately explain what this is about IN YOUR OWN WORDS. Don't copy slide titles — rephrase them like you'd explain to a friend. Example: instead of "the five steps to a single customer outcome" say "how it brings everything into one place".
+2. Tease 3-4 interesting topics they can explore — paraphrase, don't quote slide titles.
+3. Ask what they want to explore.
 
-THE #1 RULE: Your greeting must be so specific that it could ONLY apply to THIS presentation. If you could say the same greeting for a different deck, you failed.
+THE #1 RULE: Explain the product/topic like you UNDERSTAND it, not like you're reading slide titles back. If a slide says "Unified Customer Experience" you say "it pulls all your customer stuff into one place". If a slide says "AI-Powered Intelligence" you say "it's got built-in AI that actually helps agents in real time".
 
-EXAMPLES of how to match the greeting to the content:
-- AWS Connect overview → "Hey! So basically AWS has this really cool thing called Amazon Connect, and today we're looking at how the whole platform works. There's the architecture, the key features, pricing, and some customer stories. What do you want to dig into?"
-- Startup fundraising pitch → "Hey! So there's this company called FoodFlow that's completely changing restaurant ordering, and they're raising a Series A. We've got the problem, their solution, traction numbers, and the ask. What catches your eye?"
-- Q4 sales report → "Hey! So the sales team just closed out Q4, and honestly some of these numbers are pretty interesting. There's the revenue breakdown, regional performance, top deals, and next quarter targets. Where should we start?"
-- Product launch → "Hey! So the team is launching a new feature called SmartSync that basically automates all the manual data entry. We've got the use cases, the demo flow, rollout timeline, and early feedback. What sounds interesting?"
+EXAMPLES:
+- AWS Connect overview → "Hey! So Amazon Connect is basically AWS's cloud contact center — it handles calls, chats, everything in one place with built-in AI. There's how it works, the AI features, real customer results, and pricing. What do you want to dig into?"
+- Startup pitch → "Hey! So FoodFlow is trying to fix how restaurants handle orders — they've automated the whole thing and the growth numbers are actually wild. There's the problem, how it works, traction, and what they're raising. What catches your eye?"
+- Q4 report → "Hey! So Q4 just wrapped and revenue hit 12 million, which is up 30 percent from last quarter. There's the regional breakdown, top deals, and next quarter targets. Where should we start?"
 
 BANS:
 - NEVER say "this deck", "the deck", "the presenter", "the speaker", "put together"
 - NEVER say "I'm here to help", "I'm your guide", "I'll walk you through"
-- NEVER say "we just went through", "we just looked at", "I just read through" — this is the user's FIRST time seeing it
-- NEVER be generic — always reference specific content from the slides
+- NEVER say "we just went through", "we just looked at", "we covered", "I just read"
+- NEVER quote slide titles directly — always rephrase in plain language
+- NEVER say "it's pretty slick", "it's pretty cool" — be specific about WHY it's interesting
 
 Spoken voice only — no markdown, no bullets.
 
