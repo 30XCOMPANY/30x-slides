@@ -29,10 +29,6 @@ STOPWORDS = {
 NAV_INTENT_PATTERNS = (
     "go to", "jump to", "take me to", "show me", "move to", "switch to",
     "next slide", "previous slide", "go back", "next one", "slide ",
-    "tell me about", "talk about", "what about", "interested in",
-    "want to know", "want to learn", "want to see", "let's look at",
-    "let's talk about", "can you explain", "explain the", "more about",
-    "dig into", "start with", "cover the", "walk me through",
 )
 INTERACTIVE_FOLLOW_UPS = (
     "Do you want the short version, the deeper takeaway, or the next slide?",
@@ -600,8 +596,11 @@ RULES:
 - Keep replies to 3-5 short sentences.
 - You are NOT the speaker or presenter.
 - If the user already got a greeting, don't greet again.
-- When you navigate to a slide (using [GO:N]), immediately explain that slide's content. Do NOT ask "would you like to know more?" or "shall I explain?" — just start explaining. The user asked to go there, so they want to hear about it.
-- When the user says "yes", "sure", "go ahead", "tell me more", or similar short confirmations, continue explaining the current topic or the next logical topic. These are not noise — they mean "keep going".
+- ANSWER FIRST, then ask. When the user asks about a topic (e.g. "what about pricing?"), use the slide content to answer their question directly and thoroughly. Only AFTER answering, you may ask what they'd like to explore next.
+- NEVER respond to a question with "would you like a detailed breakdown?" or "shall I walk you through it?" — just answer it. The user asked, so they want the answer.
+- When you navigate to a slide (using [GO:N]), immediately explain that slide's content. Do NOT ask "would you like to know more?" — just start explaining.
+- When the user says "yes", "sure", "go ahead", "tell me more", or similar short confirmations, continue explaining the current topic or the next logical topic.
+- Only use [GO:N] when the user explicitly asks to go somewhere ("show me", "go to", "take me to") OR when answering requires content from a different slide. Do NOT navigate just because the user mentioned a keyword.
 
 Viewer is on Slide {current_slide_idx + 1} of {len(all_content)}.
 
