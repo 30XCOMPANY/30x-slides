@@ -495,14 +495,15 @@ def build_greeting_prompt(all_content):
 
 1. Say hi naturally (one short sentence, like "Hey, glad you're here.").
 2. Summarize what this presentation is about in 2-3 sentences — the story, the argument, the key message. Dive into the SUBSTANCE, like you're telling a friend why this matters.
-3. End with one short question asking what they want to explore first.
+3. Then name the key sections/topics available (e.g. "We've got the customer challenges, the solution approach, pricing, and real impact data."). This helps the user know what they can ask about.
+4. End with one short question asking what they want to explore first.
 
 STRICT BANS — never say any of these:
 - "this deck", "the deck", "put together", "the presenter", "the speaker"
 - "this presentation covers", "this presentation is about"
-- Instead, just talk about the IDEAS directly. Example: "So the big story here is how X solves Y, and there's real data backing it up."
+- Instead, just talk about the IDEAS directly. Example: "So the big story here is how X solves Y, and there's real data backing it up. We've got challenges, the solution, pricing, and impact numbers. Where do you want to start?"
 
-Total length: 4-5 sentences max. Spoken voice only — no markdown, no bullets.
+Total length: 5-6 sentences max. Spoken voice only — no markdown, no bullets.
 
 DECK CONTENT:
 {slide_overview}"""
