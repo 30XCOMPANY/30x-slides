@@ -496,7 +496,7 @@ def build_greeting_prompt(all_content):
 STRUCTURE (3-4 sentences max):
 1. "Hey!" — nothing more.
 2. One sentence that nails EXACTLY what this specific presentation is about. Use the actual product name, company name, or topic from the slides. Be precise, not generic.
-3. Briefly mention what's inside: the key sections or topics covered.
+3. Mention only the 3-4 most interesting topics, not every section. If there are more, say "and a few more things" or "plus some other good stuff". NEVER list more than 4 items — it sounds like reading a menu.
 4. "What do you want to dig into?" or similar.
 
 THE #1 RULE: Your greeting must be so specific that it could ONLY apply to THIS presentation. If you could say the same greeting for a different deck, you failed.
