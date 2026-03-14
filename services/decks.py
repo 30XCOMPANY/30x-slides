@@ -494,23 +494,25 @@ def build_greeting_prompt(all_content):
     return f"""Someone just opened a presentation and you're greeting them for the first time. This is the FIRST thing they hear.
 
 STRUCTURE (3 sentences):
-1. "Hey!" then immediately explain what this is about IN YOUR OWN WORDS. Don't copy slide titles — rephrase them like you'd explain to a friend. Example: instead of "the five steps to a single customer outcome" say "how it brings everything into one place".
-2. Tease 3-4 interesting topics they can explore — paraphrase, don't quote slide titles.
-3. Ask what they want to explore.
+1. Start with "Hey, I'm your slide guide!" — always this exact opener, nothing more.
+2. One sentence explaining what this presentation is about IN YOUR OWN WORDS. Don't copy slide titles — rephrase them naturally. Say what the product/topic IS and why it's interesting.
+3. Tease 3-4 topics they can ask about (use "there's..." or "you can ask me about..."), then ask what interests them.
 
-THE #1 RULE: Explain the product/topic like you UNDERSTAND it, not like you're reading slide titles back. If a slide says "Unified Customer Experience" you say "it pulls all your customer stuff into one place". If a slide says "AI-Powered Intelligence" you say "it's got built-in AI that actually helps agents in real time".
+KEY RULES:
+- Explain like you UNDERSTAND the content. "Unified Customer Experience" → "it pulls all your customer stuff into one place". "AI-Powered Intelligence" → "built-in AI that helps agents in real time".
+- The topics list is a MENU for the user to pick from, not a plan of what you'll cover. Say "there's X, Y, and Z" NOT "we'll go over X, Y, and Z".
+- Keep it tight — 3 sentences total, no fluff.
 
 EXAMPLES:
-- AWS Connect overview → "Hey! So Amazon Connect is basically AWS's cloud contact center — it handles calls, chats, everything in one place with built-in AI. There's how it works, the AI features, real customer results, and pricing. What do you want to dig into?"
-- Startup pitch → "Hey! So FoodFlow is trying to fix how restaurants handle orders — they've automated the whole thing and the growth numbers are actually wild. There's the problem, how it works, traction, and what they're raising. What catches your eye?"
-- Q4 report → "Hey! So Q4 just wrapped and revenue hit 12 million, which is up 30 percent from last quarter. There's the regional breakdown, top deals, and next quarter targets. Where should we start?"
+- AWS Connect → "Hey, I'm your slide guide! So Amazon Connect is AWS's cloud contact center — it handles calls, chats, everything in one place with built-in AI. There's how it works, the AI features, customer results, and pricing — what interests you?"
+- Startup pitch → "Hey, I'm your slide guide! FoodFlow has basically automated restaurant ordering and their growth numbers are wild. There's the problem they're solving, how it works, traction data, and what they're raising — what do you want to hear about?"
+- Q4 report → "Hey, I'm your slide guide! Q4 revenue hit 12 million, up 30 percent from last quarter. There's the regional breakdown, top deals, and next quarter targets — where should we start?"
 
 BANS:
 - NEVER say "this deck", "the deck", "the presenter", "the speaker", "put together"
-- NEVER say "I'm here to help", "I'm your guide", "I'll walk you through"
-- NEVER say "we just went through", "we just looked at", "we covered", "I just read"
+- NEVER say "we'll go over", "we'll cover", "we'll look at", "let me walk you through"
+- NEVER say "we just went through", "we just looked at", "we covered"
 - NEVER quote slide titles directly — always rephrase in plain language
-- NEVER say "it's pretty slick", "it's pretty cool" — be specific about WHY it's interesting
 
 Spoken voice only — no markdown, no bullets.
 
