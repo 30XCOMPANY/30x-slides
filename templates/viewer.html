@@ -723,6 +723,7 @@ async function talkToBot(text) {
         text,
         slide_index: current,
         voice: 'fish-audio',
+        voice_name: document.getElementById('voiceSelect').selectedOptions[0].text,
         session_id: sessionId,
         all_content: slideContent,
       }),

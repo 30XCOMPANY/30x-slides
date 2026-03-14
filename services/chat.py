@@ -211,6 +211,7 @@ def build_response_context(deck_id, payload, output_folder):
     text = payload.get("text", "").strip()
     slide_idx = payload.get("slide_index", 0)
     voice = payload.get("voice", "af_heart")
+    voice_name = payload.get("voice_name", "Nomi")
     session_id = payload.get("session_id", "default")
 
     print(f"[TALK] text={text}, slide={slide_idx}, voice={voice}", flush=True)
@@ -243,6 +244,7 @@ def build_response_context(deck_id, payload, output_folder):
         "history": history,
         "messages": messages,
         "is_internal": is_internal,
+        "voice_name": voice_name,
     }
 
 
@@ -291,19 +293,22 @@ def stream_talk_response(deck_id, payload, output_folder):
         return
 
     # [GREET]: 优先用预生成的, 没有才调 LLM
+    voice_name = ctx["voice_name"]
     if text == "[GREET]":
         if history:
             yield emit_event("done", text="", nav=None)
             return
-        cached = get_pregenerated_greeting(deck_id)
+        # 预生成的 greeting 用默认名字 Nomi, 如果选了其他声音就跳过缓存
+        is_default_voice = voice_name in ("Nomi", "Default", "")
+        cached = get_pregenerated_greeting(deck_id) if is_default_voice else None
         if cached:
             history.append({"role": "assistant", "content": cached})
             yield from stream_scripted_reply(cached, None)
             return
-        system_prompt = build_greeting_prompt(all_content)
+        system_prompt = build_greeting_prompt(all_content, voice_name=voice_name)
         fallback_fn = lambda: build_greeting(all_content)
     else:
-        system_prompt = build_system_prompt(all_content, slide_idx, allow_control_tags=True)
+        system_prompt = build_system_prompt(all_content, slide_idx, allow_control_tags=True, voice_name=voice_name)
         fallback_fn = lambda: build_local_slide_reply(all_content, slide_idx, text)
 
     visible = ""
@@ -367,7 +372,8 @@ def build_talk_response(deck_id, payload, output_folder):
     inferred_nav = ctx["inferred_nav"]
     history = ctx["history"]
     messages = ctx["messages"]
-    system_prompt = build_system_prompt(all_content, slide_idx)
+    voice_name = ctx.get("voice_name", "Nomi")
+    system_prompt = build_system_prompt(all_content, slide_idx, voice_name=voice_name)
 
     if text != "[GREET]" and should_use_local_explainer(text):
         raw_reply = build_local_slide_reply(all_content, slide_idx, text)

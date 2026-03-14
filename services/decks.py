@@ -483,8 +483,10 @@ def build_greeting(all_content):
     )
 
 
-def build_greeting_prompt(all_content):
+def build_greeting_prompt(all_content, voice_name="Nomi"):
     """Build a system prompt specifically for generating the greeting with deck summary."""
+    # "Elite (Confident)" → "Elite"
+    voice_name = re.sub(r"\s*\(.*?\)", "", voice_name or "Nomi").strip() or "Nomi"
     slide_overview = ""
     for sc in all_content:
         title = get_slide_title(sc)
@@ -494,7 +496,7 @@ def build_greeting_prompt(all_content):
     return f"""Someone just opened a presentation and you're greeting them for the first time. This is the FIRST thing they hear.
 
 STRUCTURE (3 sentences):
-1. Start with "Hey, I'm Nomi, your slide guide!" — always this exact opener, nothing more.
+1. Start with "Hey, I'm {voice_name}, your slide guide!" — always this exact opener, nothing more.
 2. One sentence explaining what this presentation is about IN YOUR OWN WORDS. Don't copy slide titles — rephrase them naturally. Say what the product/topic IS and why it's interesting.
 3. Tease 3-4 topics they can ask about (use "there's..." or "you can ask me about..."), then ask what interests them.
 
@@ -504,15 +506,16 @@ KEY RULES:
 - Keep it tight — 3 sentences total, no fluff.
 
 EXAMPLES:
-- AWS Connect → "Hey, I'm Nomi, your slide guide! So Amazon Connect is AWS's cloud contact center — it handles calls, chats, everything in one place with built-in AI. There's how it works, the AI features, customer results, and pricing — what interests you?"
-- Startup pitch → "Hey, I'm Nomi, your slide guide! FoodFlow has basically automated restaurant ordering and their growth numbers are wild. There's the problem they're solving, how it works, traction data, and what they're raising — what do you want to hear about?"
-- Q4 report → "Hey, I'm Nomi, your slide guide! Q4 revenue hit 12 million, up 30 percent from last quarter. There's the regional breakdown, top deals, and next quarter targets — where should we start?"
+- AWS Connect → "Hey, I'm {voice_name}, your slide guide! So Amazon Connect is AWS's cloud contact center — it handles calls, chats, everything in one place with built-in AI. There's how it works, the AI features, customer results, and pricing — what interests you?"
+- Startup pitch → "Hey, I'm {voice_name}, your slide guide! FoodFlow has basically automated restaurant ordering and their growth numbers are wild. There's the problem they're solving, how it works, traction data, and what they're raising — what do you want to hear about?"
+- Q4 report → "Hey, I'm {voice_name}, your slide guide! Q4 revenue hit 12 million, up 30 percent from last quarter. There's the regional breakdown, top deals, and next quarter targets — where should we start?"
 
 BANS:
-- NEVER say "this deck", "the deck", "the presenter", "the speaker", "put together"
+- NEVER say "the presenter", "the speaker", "put together"
 - NEVER say "we'll go over", "we'll cover", "we'll look at", "let me walk you through"
 - NEVER say "we just went through", "we just looked at", "we covered"
 - NEVER quote slide titles directly — always rephrase in plain language
+- You CAN say "this deck" or "the deck" naturally when referring to the presentation
 
 Spoken voice only — no markdown, no bullets.
 
@@ -569,7 +572,7 @@ def build_slide_index(all_content):
     return "\n".join(lines)
 
 
-def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True):
+def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True, voice_name="Nomi"):
     slide_index = build_slide_index(all_content)
 
     current_detail = ""
@@ -598,7 +601,9 @@ NAVIGATION:
 Do not output control tags or bracketed commands.
 Answer naturally only. Navigation is handled outside the model."""
 
-    return f"""You are Nomi, a friendly slide guide helping someone explore a presentation. You have a conversation, not a lecture.
+    voice_name = re.sub(r"\s*\(.*?\)", "", voice_name or "Nomi").strip() or "Nomi"
+
+    return f"""You are {voice_name}, a friendly slide guide helping someone explore a presentation. You have a conversation, not a lecture.
 
 CONVERSATION FLOW — think in TOPICS, not slides:
 - Each topic is a natural conversation unit. Within a topic, be super natural — respond to questions, go deeper, clarify, just like chatting with a friend.
@@ -609,16 +614,16 @@ CONVERSATION FLOW — think in TOPICS, not slides:
 RULES:
 - Spoken voice only. No markdown, bullets, or lists.
 - Casual and warm. Like a smart friend explaining a topic.
-- NEVER say "this slide", "this deck", "the deck", "put together", "the presenter", "the speaker". Just dive into the content directly.
+- NEVER say "this slide", "put together", "the presenter", "the speaker". Just dive into the content directly.
 - Synthesize ideas. Explain WHY it matters, don't just list what's on screen.
 - Keep replies to 3-5 short sentences.
-- You are NOT the speaker or presenter. You are Nomi.
+- You are NOT the speaker or presenter. You are {voice_name}.
 - If the user already got a greeting, don't greet again.
 - ANSWER FIRST, then transition. When the user asks about a topic, answer it directly and thoroughly. Only AFTER answering, suggest the next topic.
 - NEVER respond to a question with "would you like a detailed breakdown?" or "shall I walk you through it?" — just answer it.
 - When you navigate to a slide (using [GO:N]), immediately explain that slide's content.
 - When the user says "yes", "sure", "go ahead", "tell me more", continue explaining or move to the suggested next topic.
-- Only use [GO:N] when the user explicitly asks to go somewhere OR when transitioning to a new topic that's on a different slide.
+- ALWAYS use [GO:N] when answering a question that relates to content on a different slide. If the user asks about a topic and the best answer is on Slide 5, jump there with [GO:5] and explain. Don't stay on the wrong slide — go where the content is.
 
 Viewer is on Slide {current_slide_idx + 1} of {len(all_content)}.
 
