@@ -491,24 +491,26 @@ def build_greeting_prompt(all_content):
         body = " | ".join(sc.get("text", [])[:3])
         slide_overview += f"  Slide {sc['slide']}: {title} — {body}\n"
 
-    return f"""You're casually introducing a presentation to a friend. Sound like a real person — excited, natural, storytelling tone.
+    return f"""You just read through a presentation and now you're telling a friend about it. Your greeting must be SPECIFIC to the actual content — mention real names, real products, real numbers from the slides.
 
-STRUCTURE (4 sentences max):
-1. "Hey!" or "Hey, welcome!" — nothing more.
-2. Jump straight into the story like you're gossiping: "So basically, [Company] has this massive problem with [X], and there's a pretty cool approach here that [result]." Make it sound interesting, not like a book report.
-3. Tease the good stuff in one sentence: "There's the challenges, how the solution actually works, pricing breakdown, and some real impact numbers."
-4. "What sounds interesting?"
+STRUCTURE (3-4 sentences max):
+1. "Hey!" — nothing more.
+2. One sentence that nails EXACTLY what this specific presentation is about. Use the actual product name, company name, or topic from the slides. Be precise, not generic.
+3. Briefly mention what's inside: the key sections or topics covered.
+4. "What do you want to dig into?" or similar.
 
-TONE RULES:
-- Talk like you're excited to show a friend something cool you found
-- Use "basically", "pretty cool", "really interesting", "the cool part is" — casual connectors
-- NEVER sound like a corporate narrator or news anchor
-- NEVER use "the core idea is", "the key story is", "this presentation focuses on" — way too formal
-- NEVER say "this deck", "the deck", "put together", "the presenter", "the speaker", "I'm here to help", "I'm your guide"
-- Start sentences with "So", "Basically", "And" — like real speech
+THE #1 RULE: Your greeting must be so specific that it could ONLY apply to THIS presentation. If you could say the same greeting for a different deck, you failed.
 
-BAD: "Hey welcome! The core idea is how Company X addresses supply chain inefficiency through AI optimization."
-GOOD: "Hey! So basically, Company X figured out that supply chains are bleeding money from manual processes, and they've got this AI thing that cuts costs by like 40 percent. There's the problem breakdown, how it works, pricing, and real results. What sounds interesting?"
+EXAMPLES of how to match the greeting to the content:
+- AWS Connect overview → "Hey! So basically AWS has this really cool thing called Amazon Connect, and today we're looking at how the whole platform works. There's the architecture, the key features, pricing, and some customer stories. What do you want to dig into?"
+- Startup fundraising pitch → "Hey! So there's this company called FoodFlow that's completely changing restaurant ordering, and they're raising a Series A. We've got the problem, their solution, traction numbers, and the ask. What catches your eye?"
+- Q4 sales report → "Hey! So the sales team just closed out Q4, and honestly some of these numbers are pretty interesting. There's the revenue breakdown, regional performance, top deals, and next quarter targets. Where should we start?"
+- Product launch → "Hey! So the team is launching a new feature called SmartSync that basically automates all the manual data entry. We've got the use cases, the demo flow, rollout timeline, and early feedback. What sounds interesting?"
+
+BANS:
+- NEVER say "this deck", "the deck", "the presenter", "the speaker", "put together"
+- NEVER say "I'm here to help", "I'm your guide", "I'll walk you through"
+- NEVER be generic — always reference specific content from the slides
 
 Spoken voice only — no markdown, no bullets.
 
