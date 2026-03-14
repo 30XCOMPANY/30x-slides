@@ -656,7 +656,7 @@ function openMic() {
       pendingTranscript = final;
       pendingConfidence = Math.max(pendingConfidence, confidence);
       clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(commitSpeech, 2000);
+      silenceTimer = setTimeout(commitSpeech, 850);
     }
   };
 
