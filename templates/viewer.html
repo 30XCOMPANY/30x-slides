@@ -499,13 +499,17 @@ function applyReplacements() {
   selects.forEach(s => { if (s.value) replacements[s.dataset.original] = s.value; });
   weights.forEach(s => { if (s.value && s.value !== '400') weightMap[s.dataset.original] = s.value; });
   if (!Object.keys(replacements).length) { showToast('Select at least one replacement'); return; }
-  document.getElementById('loadingOverlay').classList.add('show');
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.classList.add('show');
   document.getElementById('fontOverlay').classList.remove('show');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 280000);
   fetch(`/reconvert/${deckId}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ replacements, weights: weightMap }),
-  }).then(r => { if (r.ok) location.reload(); else showToast('Error'); })
-    .catch(() => showToast('Connection error'));
+    signal: controller.signal,
+  }).then(r => { clearTimeout(timer); if (r.ok) location.reload(); else { overlay.classList.remove('show'); showToast('Rendering failed'); } })
+    .catch(() => { clearTimeout(timer); overlay.classList.remove('show'); showToast('Rendering timed out — try a smaller deck'); });
 }
 function showToast(msg) {
   const t = document.getElementById('toast');
