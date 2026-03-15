@@ -559,13 +559,17 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
 
 
 def build_slide_index(all_content):
-    """每页: 标题(加粗标记) + 全部内容, 让 LLM 清楚区分标题 vs 正文"""
+    """每页: 标题 + 精简关键短语, 控制 index 总量避免 LLM 注意力稀释"""
     lines = []
     for sc in all_content:
         title = get_slide_title(sc)
         body = sc.get("text", [])[1:]
-        summary = " | ".join(b for b in body if b.strip())
-        if summary:
+        # 只取前 5 行, 每行截断到 80 字符
+        key_points = [b[:80] for b in body if b.strip()][:5]
+        summary = " | ".join(key_points)
+        if not body or not any(b.strip() for b in body):
+            lines.append(f"  Slide {sc['slide']} [TITLE: {title}] (visual/image slide)")
+        elif summary:
             lines.append(f"  Slide {sc['slide']} [TITLE: {title}] — {summary}")
         else:
             lines.append(f"  Slide {sc['slide']} [TITLE: {title}]")
@@ -605,6 +609,8 @@ MATCHING PROCESS (do this every time the user speaks):
 
 Be aggressive — if there's ANY reasonable match on a different slide, navigate. Better to jump than to stay on the wrong slide.
 NEVER ask "would you like me to take you there?" — just GO.
+
+VISUAL SLIDES: Slides marked "(visual/image slide)" have no extractable text — they're mostly images/charts. Don't navigate to them unless the user explicitly asks for that slide number. When explaining nearby content, mention what the visual slide likely shows based on surrounding context.
 ================================="""
     else:
         nav_block = """
