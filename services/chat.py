@@ -315,28 +315,31 @@ def stream_talk_response(deck_id, payload, output_folder):
     sentence_buffer = ""
     completed_sentences = []
     fallback_reply = None
-    llm_nav = None  # LLM 自己决定的 [GO:N] 导航
+    last_nav = None  # 最后一次 [GO:N], 用于 done 事件
 
-    def strip_nav_tag(s):
-        """从文本中提取并移除 [GO:...] 标签"""
-        nonlocal llm_nav
+    def extract_nav_tag(s):
+        """从文本中提取并移除 [GO:...] 标签, 返回 (cleaned_text, nav_or_None)"""
+        nonlocal last_nav
         match = re.search(r"\[GO:(\w+)\]", s)
         if match:
-            llm_nav = match.group(1)
+            nav = match.group(1)
+            last_nav = nav
             s = re.sub(r"\s*\[GO:\w+\]\s*", " ", s).strip()
-        return s
+            return s, nav
+        return s, None
 
     try:
         for delta in stream_chat_with_llm(system_prompt, messages):
             sentence_buffer += delta
             visible += delta
-            yield emit_event("text", text=strip_nav_tag(visible).strip())
+            cleaned_visible, _ = extract_nav_tag(visible)
+            yield emit_event("text", text=cleaned_visible.strip())
             complete, sentence_buffer = split_completed_sentences(sentence_buffer)
             for sentence in complete:
-                cleaned = strip_nav_tag(sentence)
+                cleaned, sentence_nav = extract_nav_tag(sentence)
                 if cleaned:
                     completed_sentences.append(cleaned)
-                    yield emit_event("sentence", text=cleaned)
+                    yield emit_event("sentence", text=cleaned, nav=sentence_nav)
     except Exception as exc:
         print(f"[LLM STREAM ERROR] {exc}", flush=True)
         fallback_reply = fallback_fn()
@@ -347,16 +350,15 @@ def stream_talk_response(deck_id, payload, output_folder):
         return
 
     if sentence_buffer.strip():
-        cleaned = strip_nav_tag(sentence_buffer.strip())
+        cleaned, sentence_nav = extract_nav_tag(sentence_buffer.strip())
         if cleaned:
             completed_sentences.append(cleaned)
-            yield emit_event("sentence", text=cleaned)
+            yield emit_event("sentence", text=cleaned, nav=sentence_nav)
 
     raw_reply = " ".join(completed_sentences).strip()
     raw_reply = trim_spoken_reply(raw_reply)
     history.append({"role": "assistant", "content": raw_reply})
-    # LLM 的 [GO:N] 优先, 否则用关键词推断
-    final_nav = llm_nav or (inferred_nav if text != "[GREET]" else None)
+    final_nav = last_nav or (inferred_nav if text != "[GREET]" else None)
     yield emit_event("done", text=raw_reply, nav=final_nav)
 
 

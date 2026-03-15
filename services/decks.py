@@ -610,7 +610,7 @@ def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True,
 ===== NAVIGATION (CRITICAL) =====
 You MUST navigate whenever the user's message relates to content on a DIFFERENT slide. This is the #1 most important feature.
 
-HOW: Include [GO:N] at the START of your reply (N = slide number). The system strips it and auto-jumps.
+HOW: Include [GO:N] before the sentence about that slide (N = slide number). The system strips it and auto-jumps. You can use MULTIPLE [GO:N] tags in one reply — the viewer will flip slides as you talk about each one.
 
 WHEN TO NAVIGATE:
 - User mentions ANY topic, keyword, or concept that appears in a different slide's content → [GO:N] + explain
@@ -622,12 +622,12 @@ MATCHING PROCESS (do this every time the user speaks):
 2. Scan the SLIDE INDEX below — check every slide's TITLE and body content
 3. DISAMBIGUATION:
    - If ONE slide clearly matches → [GO:N] and explain
-   - If multiple slides match equally well (e.g. user says "data" but 5 slides have data) → DON'T jump. Instead, list the specific topics available: "There's data on several things — the $644B market size, the 60% failure rate, trust statistics... which one interests you?"
+   - If MULTIPLE slides match (e.g. user says "data" and 3 slides have data) → walk through them! Use multiple [GO:N] tags: "[GO:33] So the total market is $644 billion. [GO:34] But 60% of companies are getting zero return. [GO:45] And trust numbers are dropping too."
    - Title match wins over body-only match when deciding best fit
 4. If the current slide already has the answer → just answer, no navigation
 
-Navigate confidently when there's a CLEAR best match. But when the query is vague (like "data", "numbers", "results"), help the user narrow down instead of guessing wrong.
-NEVER ask "would you like me to take you there?" — just GO when you're confident.
+Navigate confidently. When multiple slides are relevant, walk through the highlights — the viewer flips automatically as you talk.
+NEVER ask "would you like me to take you there?" — just GO.
 
 VISUAL SLIDES: Slides marked "(visual/image slide)" have no extractable text — they're mostly images/charts. Don't navigate to them unless the user explicitly asks for that slide number. When explaining nearby content, mention what the visual slide likely shows based on surrounding context.
 ================================="""

@@ -806,7 +806,7 @@ async function talkToBot(text) {
         if (event.type === 'text') {
           /* 不显示 — 字幕等 TTS 播放时同步出现 */
         } else if (event.type === 'sentence') {
-          enqueueSentenceSpeech(event.text || '');
+          enqueueSentenceSpeech(event.text || '', event.nav || null);
         } else if (event.type === 'done') {
           flushPendingSpeech();
           streamDone = true;
@@ -905,28 +905,33 @@ function preloadNextAudio() {
   const seg = speechQueue.shift();
   const audio = makeAudioForText(seg.ttsText);
   audio.preload = 'auto';
-  preloadedSegment = { audio, displayText: seg.displayText };
+  preloadedSegment = { audio, displayText: seg.displayText, nav: seg.nav };
 }
 
 function playNextQueuedSentence() {
   if (!conversationMode) return;
   if (currentAudio) return;
 
-  let audio, displayText;
+  let audio, displayText, nav;
   if (preloadedSegment) {
     audio = preloadedSegment.audio;
     displayText = preloadedSegment.displayText;
+    nav = preloadedSegment.nav;
     preloadedSegment = null;
   } else if (speechQueue.length) {
     const seg = speechQueue.shift();
     audio = makeAudioForText(seg.ttsText);
     displayText = seg.displayText;
+    nav = seg.nav;
   } else {
     /* 所有音频播完, 清掉字幕 */
     hideSubtitle();
     maybeResumeMic();
     return;
   }
+
+  /* 边说边翻: 这句话开始播时立刻跳到对应 slide */
+  if (nav) applyNav(nav);
 
   currentAudio = audio;
   const activateFish = () => { voiceState = STATE.SPEAKING; updateButton(); };
@@ -943,14 +948,18 @@ function playNextQueuedSentence() {
   preloadNextAudio();
 }
 
+let pendingNavCommand = null; /* 当前攒的 nav, flush 时附到 segment 上 */
+
 function flushPendingSpeech() {
   const cleaned = pendingSpeechText.trim();
+  const nav = pendingNavCommand;
   pendingSpeechText = '';
   pendingSpeechTimer = null;
   pendingSentenceCount = 0;
+  pendingNavCommand = null;
   if (!cleaned) return;
   totalFlushedBatches++;
-  speechQueue.push({ ttsText: cleaned, displayText: cleaned });
+  speechQueue.push({ ttsText: cleaned, displayText: cleaned, nav });
   /* 如果当前有音频在播但还没预加载下一段, 立刻预加载 */
   if (currentAudio && !preloadedSegment) {
     preloadNextAudio();
@@ -962,18 +971,13 @@ function flushPendingSpeech() {
 let pendingSentenceCount = 0;
 let totalFlushedBatches = 0;
 
-function enqueueSentenceSpeech(text) {
+function enqueueSentenceSpeech(text, nav) {
   const cleaned = (text || '').trim();
   if (!cleaned) return;
+  if (nav) pendingNavCommand = nav;
   pendingSpeechText = pendingSpeechText ? `${pendingSpeechText} ${cleaned}` : cleaned;
   pendingSentenceCount++;
   clearTimeout(pendingSpeechTimer);
-  /*
-   * 策略: 每句到了就立刻发 TTS, 不攒批
-   * — 第一句: 立刻发, 用户最快听到声音
-   * — 后续句: 也立刻发, 趁前一句播放时预加载, 消除句间空白
-   * TTS 调用数增加但衔接零间隔, 体验远优于攒批
-   */
   flushPendingSpeech();
 }
 </script>
