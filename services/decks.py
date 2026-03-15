@@ -565,32 +565,86 @@ def _slide_content_signature(sc):
     return f"{title}|{body}"
 
 
+def _is_template_slide(sc):
+    """Detect placeholder/template slides that shouldn't appear in the index."""
+    title = get_slide_title(sc).strip().lower()
+    all_text = " ".join(sc.get("text", [])).lower()
+    # --- generic placeholder titles (any language) ---
+    template_markers = (
+        "заголовок слайда", "заголовок раздела",  # Russian: "slide title", "section title"
+        "название презентации",  # Russian: "presentation name"
+        "спасибо за внимание",  # Russian: "thank you for attention"
+        "slide title", "section title", "placeholder",
+        "click to add", "insert title here",
+    )
+    if any(marker in title for marker in template_markers):
+        return True
+    # --- template body markers ---
+    body_markers = (
+        "краткий заголовок презентации",  # Russian: "brief presentation title"
+        "lorem ipsum", "click to add text",
+        "подзаголовок блока",  # Russian: "block subtitle" (template)
+    )
+    if any(marker in all_text for marker in body_markers):
+        return True
+    return False
+
+
+def _has_substantial_content(sc):
+    """Check if a slide has enough content to be useful for navigation."""
+    body = sc.get("text", [])[1:]
+    meaningful = [b for b in body if b.strip() and len(b.strip()) > 3]
+    return len(meaningful) >= 1
+
+
 def build_slide_index(all_content):
-    """Smart index: dedup animation frames, skip template slides, cap content per slide."""
-    lines = []
-    seen_signatures = {}  # signature → first slide number
+    """Smart index: dedup, filter templates, skip visual-only, cap total entries."""
+    entries = []
+    seen_signatures = set()
+    seen_titles = {}  # title → slide number (for section divider dedup)
 
     for sc in all_content:
+        # --- skip templates ---
+        if _is_template_slide(sc):
+            continue
+
+        # --- skip animation duplicates (same title + same body) ---
+        sig = _slide_content_signature(sc)
+        if sig in seen_signatures:
+            continue
+        seen_signatures.add(sig)
+
         title = get_slide_title(sc)
         body = sc.get("text", [])[1:]
+
+        # --- skip visual/transition slides with very short titles (≤3 chars) ---
+        if not _has_substantial_content(sc) and len(title.strip()) <= 3:
+            continue
+
+        # --- same-title dedup: keep the one with the MOST content ---
+        title_lower = title.strip().lower()
+        if title_lower in seen_titles:
+            prev_idx = seen_titles[title_lower]
+            prev_sc = all_content[prev_idx - 1] if prev_idx <= len(all_content) else None
+            prev_body_len = len([b for b in (prev_sc or {}).get("text", [])[1:] if b.strip()]) if prev_sc else 0
+            curr_body_len = len([b for b in body if b.strip()])
+            if curr_body_len <= prev_body_len:
+                continue  # previous one had more content, skip this one
+            # this one has more content — replace the previous entry
+            entries = [e for e in entries if f"Slide {prev_idx} " not in e]
+        seen_titles[title_lower] = sc["slide"]
+
         key_points = [b[:80] for b in body if b.strip()][:5]
         summary = " | ".join(key_points)
 
-        # --- skip animation duplicates: same title + same body → point to first occurrence ---
-        sig = _slide_content_signature(sc)
-        if sig in seen_signatures:
-            continue  # skip duplicate, LLM uses first occurrence
-        seen_signatures[sig] = sc["slide"]
-
-        # --- tag visual/image slides ---
-        if not body or not any(b.strip() for b in body):
-            lines.append(f"  Slide {sc['slide']} [TITLE: {title}] (visual/image slide)")
+        if not _has_substantial_content(sc):
+            entries.append(f"  Slide {sc['slide']} [TITLE: {title}] (visual/image slide)")
         elif summary:
-            lines.append(f"  Slide {sc['slide']} [TITLE: {title}] — {summary}")
+            entries.append(f"  Slide {sc['slide']} [TITLE: {title}] — {summary}")
         else:
-            lines.append(f"  Slide {sc['slide']} [TITLE: {title}]")
+            entries.append(f"  Slide {sc['slide']} [TITLE: {title}]")
 
-    return "\n".join(lines)
+    return "\n".join(entries)
 
 
 def build_system_prompt(all_content, current_slide_idx, allow_control_tags=True, voice_name="Nomi"):
