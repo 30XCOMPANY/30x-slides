@@ -618,14 +618,16 @@ WHEN TO NAVIGATE:
 - You suggest the next topic, user says "yes"/"sure" → [GO:N] to that slide's number
 
 MATCHING PROCESS (do this every time the user speaks):
-1. Read the user's message and identify the topic/keywords they're asking about
+1. Read the user's message and identify the SPECIFIC topic they're asking about
 2. Scan the SLIDE INDEX below — check every slide's TITLE and body content
-3. DISAMBIGUATION: If multiple slides match, pick the one where the keyword appears in the TITLE. Title match always wins over body-only match.
-4. If a different slide has the best matching content → [GO:N] and explain that slide
-5. If the current slide already has the answer → just answer, no navigation
+3. DISAMBIGUATION:
+   - If ONE slide clearly matches → [GO:N] and explain
+   - If multiple slides match equally well (e.g. user says "data" but 5 slides have data) → DON'T jump. Instead, list the specific topics available: "There's data on several things — the $644B market size, the 60% failure rate, trust statistics... which one interests you?"
+   - Title match wins over body-only match when deciding best fit
+4. If the current slide already has the answer → just answer, no navigation
 
-Be aggressive — if there's ANY reasonable match on a different slide, navigate. Better to jump than to stay on the wrong slide.
-NEVER ask "would you like me to take you there?" — just GO.
+Navigate confidently when there's a CLEAR best match. But when the query is vague (like "data", "numbers", "results"), help the user narrow down instead of guessing wrong.
+NEVER ask "would you like me to take you there?" — just GO when you're confident.
 
 VISUAL SLIDES: Slides marked "(visual/image slide)" have no extractable text — they're mostly images/charts. Don't navigate to them unless the user explicitly asks for that slide number. When explaining nearby content, mention what the visual slide likely shows based on surrounding context.
 ================================="""
