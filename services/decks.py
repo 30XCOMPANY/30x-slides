@@ -558,21 +558,38 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
     return " ".join(parts[:3])
 
 
+def _slide_content_signature(sc):
+    """Generate a content fingerprint to detect duplicate/animation-frame slides."""
+    title = get_slide_title(sc).strip().lower()
+    body = " ".join((sc.get("text", [])[1:])[:3]).strip().lower()
+    return f"{title}|{body}"
+
+
 def build_slide_index(all_content):
-    """每页: 标题 + 精简关键短语, 控制 index 总量避免 LLM 注意力稀释"""
+    """Smart index: dedup animation frames, skip template slides, cap content per slide."""
     lines = []
+    seen_signatures = {}  # signature → first slide number
+
     for sc in all_content:
         title = get_slide_title(sc)
         body = sc.get("text", [])[1:]
-        # 只取前 5 行, 每行截断到 80 字符
         key_points = [b[:80] for b in body if b.strip()][:5]
         summary = " | ".join(key_points)
+
+        # --- skip animation duplicates: same title + same body → point to first occurrence ---
+        sig = _slide_content_signature(sc)
+        if sig in seen_signatures:
+            continue  # skip duplicate, LLM uses first occurrence
+        seen_signatures[sig] = sc["slide"]
+
+        # --- tag visual/image slides ---
         if not body or not any(b.strip() for b in body):
             lines.append(f"  Slide {sc['slide']} [TITLE: {title}] (visual/image slide)")
         elif summary:
             lines.append(f"  Slide {sc['slide']} [TITLE: {title}] — {summary}")
         else:
             lines.append(f"  Slide {sc['slide']} [TITLE: {title}]")
+
     return "\n".join(lines)
 
 
