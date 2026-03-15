@@ -559,16 +559,16 @@ def build_local_slide_reply(all_content, current_slide_idx, user_text=""):
 
 
 def build_slide_index(all_content):
-    """每页: 标题 + 全部内容, 给 LLM 足够信息做精准导航"""
+    """每页: 标题(加粗标记) + 全部内容, 让 LLM 清楚区分标题 vs 正文"""
     lines = []
     for sc in all_content:
         title = get_slide_title(sc)
         body = sc.get("text", [])[1:]
         summary = " | ".join(b for b in body if b.strip())
         if summary:
-            lines.append(f"  Slide {sc['slide']}: {title} — {summary}")
+            lines.append(f"  Slide {sc['slide']} [TITLE: {title}] — {summary}")
         else:
-            lines.append(f"  Slide {sc['slide']}: {title}")
+            lines.append(f"  Slide {sc['slide']} [TITLE: {title}]")
     return "\n".join(lines)
 
 
@@ -598,9 +598,10 @@ WHEN TO NAVIGATE:
 
 MATCHING PROCESS (do this every time the user speaks):
 1. Read the user's message and identify the topic/keywords they're asking about
-2. Scan the SLIDE INDEX below — check every slide's title AND content for matches
-3. If a different slide has the best matching content → [GO:N] and explain that slide
-4. If the current slide already has the answer → just answer, no navigation
+2. Scan the SLIDE INDEX below — check every slide's TITLE and body content
+3. DISAMBIGUATION: If multiple slides match, pick the one where the keyword appears in the TITLE. Title match always wins over body-only match.
+4. If a different slide has the best matching content → [GO:N] and explain that slide
+5. If the current slide already has the answer → just answer, no navigation
 
 Be aggressive — if there's ANY reasonable match on a different slide, navigate. Better to jump than to stay on the wrong slide.
 NEVER ask "would you like me to take you there?" — just GO.
